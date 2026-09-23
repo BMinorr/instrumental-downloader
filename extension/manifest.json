@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Downloader",
+  "version": "0.1.0",
+  "description": "Download instrumentals sent by clients (YouTube, Spotify, Instagram) as MP3 320kbps or WAV.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "downloads", "storage", "scripting", "tabCapture", "offscreen"],
+  "host_permissions": [
+    "http://127.0.0.1:5177/*",
+    "*://*.youtube.com/*",
+    "*://youtu.be/*",
+    "*://open.spotify.com/*",
+    "*://*.instagram.com/*",
+    "*://tunebat.com/*"
+  ]
+}

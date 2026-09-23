@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Downloader</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div id="tabs">
+        <button id="tab-link" class="tab-btn active">Link</button>
+        <button id="tab-sample" class="tab-btn">Sample</button>
+      </div>
+      <div id="header-right">
+        <button id="tab-settings" class="icon-tab-btn" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <span id="server-status" class="dot"></span>
+      </div>
+    </header>
+
+    <main id="content">
+      <div id="panel-link">
+        <p id="status-message" class="hidden"></p>
+
+        <div id="track-info" class="hidden">
+          <img id="thumbnail" alt="" />
+          <div>
+            <p id="track-title" class="title">Loading…</p>
+            <p id="track-meta" class="meta"></p>
+          </div>
+        </div>
+
+        <div id="format-options" class="hidden">
+          <button id="btn-mp3" class="format-btn">
+            <span class="spinner"></span>
+            <span class="btn-label">MP3</span>
+          </button>
+          <button id="btn-wav" class="format-btn">
+            <span class="spinner"></span>
+            <span class="btn-label">WAV</span>
+          </button>
+        </div>
+
+        <p id="progress" class="hidden"></p>
+
+        <button id="btn-tunebat" class="secondary-btn hidden">Analyze BPM &amp; Key on Tunebat</button>
+      </div>
+
+      <div id="panel-sample" class="hidden">
+        <p id="sample-status" class="meta">Record the audio playing in this tab.</p>
+
+        <div id="sample-result" class="hidden">
+          <div id="sample-toolbar">
+            <input id="sample-filename" type="text" class="text-input" spellcheck="false" />
+            <button id="sample-btn-discard" class="icon-btn" aria-label="Discard recording" title="Discard recording">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div id="sample-player">
+            <canvas id="sample-waveform" width="288" height="56"></canvas>
+            <button id="sample-play-btn" aria-label="Play">
+              <span class="icon-play"></span>
+              <span class="icon-pause"><span></span><span></span></span>
+            </button>
+            <audio id="sample-audio" class="hidden"></audio>
+          </div>
+
+          <div id="sample-format-options">
+            <button id="sample-btn-mp3" class="format-btn">
+              <span class="spinner"></span>
+              <span class="btn-label">MP3</span>
+            </button>
+            <button id="sample-btn-wav" class="format-btn">
+              <span class="spinner"></span>
+              <span class="btn-label">WAV</span>
+            </button>
+          </div>
+
+          <p id="sample-progress" class="hidden"></p>
+
+          <button id="sample-btn-tunebat" class="secondary-btn hidden">Analyze BPM &amp; Key on Tunebat</button>
+        </div>
+
+        <div id="sample-record-area">
+          <div id="sample-level-meter" class="hidden">
+            <div id="sample-level-fill"></div>
+          </div>
+          <span id="sample-timer" class="hidden">00:00</span>
+          <button id="sample-record-btn" aria-label="Record">
+            <span id="sample-record-icon"></span>
+          </button>
+        </div>
+      </div>
+
+      <div id="panel-settings" class="hidden">
+        <div class="settings-section">
+          <label class="settings-row">
+            <span>Normalize volume on export</span>
+            <input type="checkbox" id="setting-loudnorm" checked />
+          </label>
+          <p class="meta">Keeps every download/recording at a consistent perceived volume (ffmpeg loudnorm, -16 LUFS) instead of whatever level the source had.</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-row">
+            <span id="settings-server-text" class="meta">Checking server…</span>
+            <button id="settings-btn-recheck" class="icon-btn" aria-label="Check server again" title="Check again">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <button id="settings-btn-clear-cache" class="secondary-btn">Clear cached data</button>
+          <p class="meta">Forgets remembered track info, the active tab, and pending downloads. Doesn't touch files already saved to disk.</p>
+        </div>
+
+        <p class="meta settings-version">Downloader v0.1.0</p>
+      </div>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

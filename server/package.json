@@ -1,0 +1,14 @@
+{
+  "name": "instrumental-downloader-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Server local care descarcă audio de pe YouTube (via yt-dlp) și îl convertește în MP3 320kbps sau WAV pentru extensia Chrome.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
