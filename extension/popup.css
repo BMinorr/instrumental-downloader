@@ -23,6 +23,12 @@ body {
 }
 
 header {
+  /* The Settings panel is taller than a popup can be (~600px) and scrolls — keep the
+     tabs in view while it does. */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
   padding: 14px 16px 10px;
   display: flex;
   align-items: center;
@@ -188,14 +194,121 @@ header {
   justify-content: space-between;
   gap: 10px;
   font-size: 13px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
-.settings-row input[type="checkbox"] {
-  accent-color: var(--accent);
+.settings-section .meta {
+  line-height: 1.4;
+}
+
+.secondary-btn + .meta {
+  margin-top: 8px;
+}
+
+.settings-title {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: background 0.15s;
+}
+
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
   width: 16px;
   height: 16px;
-  flex-shrink: 0;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(14px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+.settings-input {
+  appearance: none;
+  width: 150px;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel);
+}
+
+select.settings-input {
+  cursor: pointer;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-section code {
+  font-size: 10.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.settings-version a {
+  color: var(--accent-hover);
+  text-decoration: none;
+}
+
+.settings-version a:hover {
+  text-decoration: underline;
 }
 
 .settings-version {
@@ -415,6 +528,12 @@ main {
   border-color: var(--err);
 }
 
+/* Non-destructive icon button (e.g. "check again"): highlights in the accent color. */
+.icon-btn.neutral:hover {
+  color: var(--accent-hover);
+  border-color: var(--accent);
+}
+
 #sample-player {
   position: relative;
   margin-bottom: 10px;
@@ -595,4 +714,8 @@ main {
 
 .dot.err {
   background: var(--err);
+}
+
+.dot {
+  flex-shrink: 0;
 }

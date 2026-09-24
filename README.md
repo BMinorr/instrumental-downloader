@@ -151,7 +151,7 @@ Sursa audio se descarcă **o singură dată per piesă**; al doilea format se fa
 
 ## Normalizare volum
 
-Implicit, orice conversie (YouTube/Spotify/Instagram **și** Sample) ajunge la **-16 LUFS** (volum perceput), ca piesele/înregistrările să sune la fel de tare indiferent de sursă. Se măsoară volumul cu filtrul rapid `ebur128` (~0,4 s), apoi se aplică un câștig static + un limiter la -1,5 dBFS. Față de filtrul `loudnorm` folosit inițial (~6 s pe piesă) rezultatul e același ca volum (verificat: -16,0 LUFS, vârf -3,1 dBFS) și lasă dinamica piesei neatinsă. Piesele foarte încete sunt amplificate până la țintă, cele foarte tari sunt reduse, iar tăcerea rămâne neschimbată. Se poate dezactiva din tab-ul **Settings**.
+Implicit, orice conversie (YouTube/Spotify/Instagram **și** Sample) ajunge la **-16 LUFS** (volum perceput), ca piesele/înregistrările să sune la fel de tare indiferent de sursă. Se măsoară volumul cu filtrul rapid `ebur128` (~0,4 s), apoi se aplică un câștig static + un limiter la -1,5 dBFS. Față de filtrul `loudnorm` folosit inițial (~6 s pe piesă) rezultatul e același ca volum (verificat: -16,0 LUFS, vârf -3,1 dBFS) și lasă dinamica piesei neatinsă. Piesele foarte încete sunt amplificate până la țintă, cele foarte tari sunt reduse, iar tăcerea rămâne neschimbată. Se poate dezactiva (separat pentru Link, Sample și File) și i se poate schimba ținta din tab-ul **Settings**.
 
 ## Actualizare yt-dlp
 
@@ -234,15 +234,27 @@ Pentru un fișier pe care îl ai deja pe disc (trimis de client pe WhatsApp/mail
 4. **Conversie**: click pe un format → fișierul se descarcă cu numele original și extensia nouă (ex. `Beat.wav` → `Beat.flac`). Fișierul se urcă pe serverul local o singură dată, deci mai multe formate la rând nu îl retrimit
 5. **Tunebat**: se deschide cu fișierul deja inserat. Tunebat nu acceptă AIFF/OPUS, așa că acestea se convertesc automat întâi în WAV (fără normalizare de volum)
 
-Copia de pe server (`/api/stash`, `/api/convert-stash`) se șterge automat după 1 oră. Conversiile respectă setarea „Normalize volume" din Settings (implicit ON — dezactiv-o dacă vrei ca fișierul convertit să păstreze exact nivelul original).
+Copia de pe server (`/api/stash`, `/api/convert-stash`) se șterge automat după 1 oră. Conversiile din File **nu** normalizează volumul implicit (fișierul păstrează exact nivelul original); comutatorul „File conversions" din Settings îl activează.
 
 ## Tab-ul Settings
 
-Iconița de rotiță din colțul dreapta sus (lângă bulina de status server) deschide un al treilea tab:
+Rotița din colțul dreapta sus. Setările se salvează automat și se păstrează chiar dacă apeși „Clear cached data".
 
-- **Normalize volume on export** — dezactivează normalizarea de volum (vezi mai sus) dacă vrei fișierul exact cum a fost sursa
-- **Status server** — text complet (nu doar bulina) + buton de reverificare, util dacă tocmai ai pornit server-ul și nu vrei să închizi/redeschizi popup-ul
-- **Clear cached data** — șterge datele reținute de extensie (piese cache-uite, tab-ul activ, descărcări în așteptare) — nu atinge fișierele deja salvate pe disc
+**Volume normalization** — un comutator separat pentru fiecare categorie: *Link downloads* și *Sample recordings* (implicit pornite), *File conversions* (implicit oprit — o conversie de format nu ar trebui să schimbe volumul decât dacă îi ceri). **Target loudness**: -14 (tare), -16 (implicit) sau -18 LUFS (mai încet). Fișierele normalizate la ținte diferite se cache-uiesc separat.
+
+**Downloads**
+- *Ask where to save each file* — deschide dialogul „Save as" de fiecare dată
+- *Subfolder* — salvează în `Downloads/<subfolder>` (ex. `Instrumentals` sau `Clients/Ana`); caracterele nepermise și `..` sunt eliminate
+
+**General**
+- *Open on* — ultimul tab folosit (implicit) sau mereu File / Link / Sample
+- *Prepare MP3 & WAV in advance* — pregătirea în fundal descrisă la „Viteza descărcării"; dezactiv-o ca să economisești baterie
+
+**Local server** — aici stă acum indicatorul de status (înainte era bulina din header): punct verde/roșu + „Connected" / „Not connected", buton de reverificare și o explicație scurtă despre ce face serverul local.
+
+**Data** — *Clear cached data* șterge datele reținute de extensie (piese cache-uite, tab-ul activ, descărcări în așteptare); nu atinge setările și nici fișierele deja salvate.
+
+În subsolul panoului: versiunea și „by B Minor" (link către [bminorr.github.io](https://bminorr.github.io/)).
 
 ## Sincronizare între Mac și Windows (Git)
 

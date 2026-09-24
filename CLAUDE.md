@@ -30,8 +30,10 @@ Proiect al unui proprietar de studio de muzică: extensie Chrome + server local 
 - **Tunebat**: Tunebat e SPA (fără input în HTML-ul brut) → `background.js` verifică la 100ms (`tunebatUploadReady`: input + cheie `__reactProps$`, fallback `readyState==="complete"`) și injectează imediat, fără așteptarea `load`/1s fixă. Erorile după deschiderea tab-ului apar ca toast pe pagina Tunebat (popup-ul e deja închis).
 - **Cache server**: ffmpeg scrie întâi în `<id>.partial.<ext>` și face rename la final (un fișier trunchiat nu mai ajunge „cache hit"); sursele yt-dlp se recunosc doar după extensie finală (nu `.part`); cererile identice simultane partajează același job (`dedupe` în `ytdlp.js`).
 - **Trim** pe waveform: `-ss`/`-to` puse **după** `-i` (folosesc timeline-ul absolut al sursei — verificat empiric).
-- **Loudnorm** (`loudnorm=I=-16:TP=-1.5:LRA=11`) e implicit ON, cu toggle în Settings (`chrome.storage.local["settings.loudnorm"]`). Fișierul cache pentru varianta fără normalizare are sufixul `-raw`; sursa brută e partajată între ambele variante.
-- **Tab-ul Settings** stă în dreapta, iar bulina de status a serverului rămâne cel mai în dreapta element din header.
+- **Setări** (`chrome.storage.local`, prefix `settings.`, sunt păstrate de „Clear cached data"): `normalize.link|sample|file` (link/sample implicit ON, file implicit OFF; cheia veche `settings.loudnorm` e citită doar ca fallback pentru link/sample), `targetLufs` (-14/-16/-18), `saveAs`, `subfolder`, `startTab`, `prefetch`. Toate se citesc prin `getSettings()`; downloadurile trec prin `startDownload()` (subfolder + saveAs + anulare). Serverul primește `{loudnorm, targetLufs}` (+ `prefetch` la analyze); numele fișierului din cache poartă sufixul: `-raw` (fără normalizare), `-l14`/`-l18` (alte ținte), niciunul pentru -16.
+- **Loudness**: vezi „Viteza". Sursa brută e partajată între variantele de procesare.
+- **Status server**: bulina NU mai e în header — e în Settings > Local server (`checkServer()` actualizează punctul și textul de acolo). Tab-ul Settings stă în dreapta header-ului (rotița).
+- **Bug învățat**: un `File` fără MIME (`type === ""`) trimis cu `fetch` nu are `Content-Type` și `express.raw({type:"*/*"})` îl ignora (body gol). Rutele raw acceptă acum orice (`type: () => true`) și popup-ul trimite explicit `application/octet-stream`.
 - Fișierele din `server/downloads/` se șterg automat după 1 oră.
 
 ## Comenzi utile

@@ -235,10 +235,16 @@ async function downloadRawSource(url, downloadsDir, id, safeId, extraArgs) {
 // static gain also leaves the track's dynamics untouched (loudnorm's one-pass mode
 // rides the volume up and down), which matters for instrumentals going to mixing.
 
-const TARGET_LUFS = -16;
+const DEFAULT_TARGET_LUFS = -16;
 const LIMITER_CEILING = 0.841; // -1.5 dBFS, linear
 
 const loudnessCache = new Map(); // "source|start|end" -> integrated LUFS (or null if unmeasurable)
+
+// Whole LUFS between -30 and -6 (Settings offers -14/-16/-18); anything else -> default.
+function targetLufsFor(options = {}) {
+  const value = Math.round(Number(options.targetLufs));
+  return Number.isFinite(value) && value >= -30 && value <= -6 ? value : DEFAULT_TARGET_LUFS;
+}
 
 function trimArgs(options) {
   const args = [];
@@ -276,7 +282,7 @@ async function loudnessFilter(sourcePath, options) {
   const lufs = await measureLoudness(sourcePath, options);
   // Silence / unmeasurable audio: leave it alone rather than applying a huge gain.
   if (lufs === null || lufs < -60) return null;
-  const gainDb = Math.max(-30, Math.min(24, TARGET_LUFS - lufs));
+  const gainDb = Math.max(-30, Math.min(24, targetLufsFor(options) - lufs));
   return `volume=${gainDb.toFixed(2)}dB,alimiter=limit=${LIMITER_CEILING}:level=0`;
 }
 
@@ -322,10 +328,12 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
   });
 }
 
-function outputIdFor(safeId, convertOptions) {
-  // `loudnorm: false` gets a distinct output id (`-raw`) so the cache never mixes up
-  // the normalized (default) and untouched versions of the same track.
-  return convertOptions.loudnorm === false ? `${safeId}-raw` : safeId;
+// The cached output is named after how it was processed, so the cache never mixes up
+// the untouched version (`-raw`), the default -16 LUFS one (no suffix) and other targets.
+function outputIdFor(safeId, convertOptions = {}) {
+  if (convertOptions.loudnorm === false) return `${safeId}-raw`;
+  const target = targetLufsFor(convertOptions);
+  return target === DEFAULT_TARGET_LUFS ? safeId : `${safeId}-l${Math.abs(target)}`;
 }
 
 // Downloads + extracts audio in the requested format, caching both the raw source
@@ -371,6 +379,7 @@ module.exports = {
   saveInfo,
   prepare,
   isSupportedFormat,
+  outputIdFor,
   downloadAudio,
   convertToFormat,
 };

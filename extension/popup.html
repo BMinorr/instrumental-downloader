@@ -19,7 +19,6 @@
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
         </button>
-        <span id="server-status" class="dot"></span>
       </div>
     </header>
 
@@ -114,18 +113,70 @@
       </div>
 
       <div id="panel-settings" class="hidden">
-        <div class="settings-section">
+        <section class="settings-section">
+          <h2 class="settings-title">Volume normalization</h2>
           <label class="settings-row">
-            <span>Normalize volume on export</span>
-            <input type="checkbox" id="setting-loudnorm" checked />
+            <span>Link downloads</span>
+            <span class="switch"><input type="checkbox" id="setting-normalize-link" /><span class="switch-track"></span></span>
           </label>
-          <p class="meta">Brings every download, recording and converted file to a consistent perceived volume (-16 LUFS) instead of whatever level the source had. Turn off to keep the original level.</p>
-        </div>
-
-        <div class="settings-section">
+          <label class="settings-row">
+            <span>Sample recordings</span>
+            <span class="switch"><input type="checkbox" id="setting-normalize-sample" /><span class="switch-track"></span></span>
+          </label>
+          <label class="settings-row">
+            <span>File conversions</span>
+            <span class="switch"><input type="checkbox" id="setting-normalize-file" /><span class="switch-track"></span></span>
+          </label>
           <div class="settings-row">
-            <span id="settings-server-text" class="meta">Checking server…</span>
-            <button id="settings-btn-recheck" class="icon-btn" aria-label="Check server again" title="Check again">
+            <span>Target loudness</span>
+            <select id="setting-target-lufs" class="settings-input">
+              <option value="-14">-14 LUFS · loud</option>
+              <option value="-16">-16 LUFS · default</option>
+              <option value="-18">-18 LUFS · quiet</option>
+            </select>
+          </div>
+          <p class="meta">Brings each category to the same perceived volume. Turn a category off to keep its original level.</p>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-title">Downloads</h2>
+          <label class="settings-row">
+            <span>Ask where to save each file</span>
+            <span class="switch"><input type="checkbox" id="setting-save-as" /><span class="switch-track"></span></span>
+          </label>
+          <div class="settings-row">
+            <span>Subfolder</span>
+            <input id="setting-subfolder" type="text" class="settings-input" placeholder="e.g. Instrumentals" spellcheck="false" />
+          </div>
+          <p class="meta">Files go to your Chrome downloads folder, inside this subfolder if set.</p>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-title">General</h2>
+          <div class="settings-row">
+            <span>Open on</span>
+            <select id="setting-start-tab" class="settings-input">
+              <option value="last">Last used tab</option>
+              <option value="file">File</option>
+              <option value="link">Link</option>
+              <option value="sample">Sample</option>
+            </select>
+          </div>
+          <label class="settings-row">
+            <span>Prepare MP3 &amp; WAV in advance</span>
+            <span class="switch"><input type="checkbox" id="setting-prefetch" /><span class="switch-track"></span></span>
+          </label>
+          <p class="meta">Starts downloading and converting as soon as you open a link, so the file is ready when you click. Turn off to save battery.</p>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-title">Local server</h2>
+          <div class="settings-row">
+            <span class="server-status">
+              <span id="settings-server-dot" class="dot"></span>
+              <span id="settings-server-text">Checking…</span>
+            </span>
+            <button id="settings-btn-recheck" class="icon-btn neutral" aria-label="Check server again" title="Check again">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"></polyline>
                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -133,14 +184,16 @@
               </svg>
             </button>
           </div>
-        </div>
+          <p class="meta">A small program on this computer (127.0.0.1:5177) does the downloading and converting with yt-dlp and ffmpeg. It starts automatically when you log in. If it says not connected, start it with <code>npm start</code> in the server folder.</p>
+        </section>
 
-        <div class="settings-section">
+        <section class="settings-section">
+          <h2 class="settings-title">Data</h2>
           <button id="settings-btn-clear-cache" class="secondary-btn">Clear cached data</button>
-          <p class="meta">Forgets remembered track info, the active tab, and pending downloads. Doesn't touch files already saved to disk.</p>
-        </div>
+          <p class="meta">Forgets remembered track info, the active tab, and pending downloads. Keeps your settings and doesn't touch saved files.</p>
+        </section>
 
-        <p class="meta settings-version">Downloader v0.1.0</p>
+        <p class="meta settings-version">Downloader v<span id="app-version">0.1.0</span> by <a href="https://bminorr.github.io/" target="_blank" rel="noopener noreferrer">B Minor</a></p>
       </div>
     </main>
 

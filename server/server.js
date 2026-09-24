@@ -6,7 +6,7 @@ const fs = require("fs");
 const youtube = require("./lib/youtube");
 const instagram = require("./lib/instagram");
 const { resolveSpotifyToYoutube } = require("./lib/spotify");
-const { convertToFormat, isSupportedFormat } = require("./lib/ytdlp");
+const { convertToFormat, isSupportedFormat, outputIdFor } = require("./lib/ytdlp");
 
 // Picks the right platform module for a URL (YouTube, or a resolved-from-Spotify
 // YouTube URL, or Instagram Story/Reel/Post).
@@ -33,13 +33,15 @@ app.get("/health", (req, res) => {
 
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { url, loudnorm } = req.body || {};
+    const { url, loudnorm, targetLufs, prefetch } = req.body || {};
     const handler = handlerFor(url);
     const info = await handler.analyze(url, DOWNLOADS_DIR);
     res.json(info);
     // The user just opened the popup on this link — start fetching + encoding now so
-    // the MP3/WAV click has (almost) nothing left to wait for.
-    handler.prepare(url, DOWNLOADS_DIR, { loudnorm }).catch(() => {});
+    // the MP3/WAV click has (almost) nothing left to wait for (Settings can turn this off).
+    if (prefetch !== false) {
+      handler.prepare(url, DOWNLOADS_DIR, { loudnorm, targetLufs }).catch(() => {});
+    }
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -47,8 +49,11 @@ app.post("/api/analyze", async (req, res) => {
 
 app.post("/api/download", async (req, res) => {
   try {
-    const { url, format, loudnorm } = req.body || {};
-    const filePath = await handlerFor(url).downloadAudio(url, format, DOWNLOADS_DIR, { loudnorm });
+    const { url, format, loudnorm, targetLufs } = req.body || {};
+    const filePath = await handlerFor(url).downloadAudio(url, format, DOWNLOADS_DIR, {
+      loudnorm,
+      targetLufs,
+    });
     const filename = path.basename(filePath);
     res.json({
       downloadUrl: `/files/${encodeURIComponent(filename)}`,
@@ -61,10 +66,12 @@ app.post("/api/download", async (req, res) => {
 
 app.post("/api/spotify-resolve", async (req, res) => {
   try {
-    const { url, loudnorm } = req.body || {};
+    const { url, loudnorm, targetLufs, prefetch } = req.body || {};
     const result = await resolveSpotifyToYoutube(url, DOWNLOADS_DIR);
     res.json(result);
-    youtube.prepare(result.youtube.url, DOWNLOADS_DIR, { loudnorm }).catch(() => {});
+    if (prefetch !== false) {
+      youtube.prepare(result.youtube.url, DOWNLOADS_DIR, { loudnorm, targetLufs }).catch(() => {});
+    }
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -76,7 +83,7 @@ app.post("/api/spotify-resolve", async (req, res) => {
 // base64 adds ~33% size plus a JSON re-serialization pass for no benefit here.
 app.post(
   "/api/upload-convert",
-  express.raw({ type: "*/*", limit: "80mb" }),
+  express.raw({ type: () => true, limit: "80mb" }),
   async (req, res) => {
     try {
       const format = req.query.format;
@@ -91,11 +98,13 @@ app.post(
       const trimStart = req.query.trimStart !== undefined ? Number(req.query.trimStart) : undefined;
       const trimEnd = req.query.trimEnd !== undefined ? Number(req.query.trimEnd) : undefined;
       const loudnorm = req.query.loudnorm !== "false";
+      const targetLufs = req.query.targetLufs;
 
       const filePath = await convertToFormat(sourcePath, format, DOWNLOADS_DIR, safeId, {
         trimStart,
         trimEnd,
         loudnorm,
+        targetLufs,
       });
       const filename = path.basename(filePath);
       res.json({
@@ -108,6 +117,9 @@ app.post(
   }
 );
 
+// (Both raw-upload routes accept any Content-Type, including none: a File picked from disk
+// can have an empty `type` — e.g. an unfamiliar extension — and then fetch() sends no
+// Content-Type header at all, which a "*/*" match would treat as "not a body I parse".)
 // Stores a file the user picked in the File tab so the extension's background
 // worker can fetch it back by URL (same path the downloaded tracks take to reach
 // Tunebat) — the popup itself closes as soon as the Tunebat tab opens, so it
@@ -116,7 +128,7 @@ const STASH_EXTS = new Set(["mp3", "wav", "flac", "aac", "ogg", "m4a", "aiff", "
 const STASH_NAME_RE = /^stash-\d+-[a-z0-9]+\.[a-z0-9]+$/i;
 app.post(
   "/api/stash",
-  express.raw({ type: "*/*", limit: "100mb" }),
+  express.raw({ type: () => true, limit: "100mb" }),
   (req, res) => {
     try {
       const ext = String(req.query.ext || "").toLowerCase();
@@ -136,7 +148,7 @@ app.post(
 // The stash is uploaded once and can be converted to several formats without re-uploading.
 app.post("/api/convert-stash", async (req, res) => {
   try {
-    const { stash, format, loudnorm } = req.body || {};
+    const { stash, format, loudnorm, targetLufs } = req.body || {};
     if (!isSupportedFormat(format)) throw new Error("Format neacceptat.");
     if (typeof stash !== "string" || !STASH_NAME_RE.test(stash)) throw new Error("Fișier invalid.");
 
@@ -147,8 +159,9 @@ app.post("/api/convert-stash", async (req, res) => {
 
     // "conv-" prefix: the output must never share a name with the stash file itself
     // (e.g. converting a stashed .wav to .wav).
-    const outputId = `conv-${stash.replace(/\.[^.]+$/, "")}${loudnorm === false ? "-raw" : ""}`;
-    const filePath = await convertToFormat(sourcePath, format, DOWNLOADS_DIR, outputId, { loudnorm });
+    const options = { loudnorm, targetLufs };
+    const outputId = outputIdFor(`conv-${stash.replace(/\.[^.]+$/, "")}`, options);
+    const filePath = await convertToFormat(sourcePath, format, DOWNLOADS_DIR, outputId, options);
     const filename = path.basename(filePath);
     res.json({ downloadUrl: `/files/${encodeURIComponent(filename)}`, filename });
   } catch (err) {

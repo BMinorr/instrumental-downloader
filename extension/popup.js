@@ -9,7 +9,7 @@ const els = {
   trackMeta: document.getElementById("track-meta"),
   formatOptions: document.getElementById("format-options"),
   progress: document.getElementById("progress"),
-  serverDot: document.getElementById("server-status"),
+  serverDot: document.getElementById("settings-server-dot"),
   btnTunebat: document.getElementById("btn-tunebat"),
   tabFile: document.getElementById("tab-file"),
   tabLink: document.getElementById("tab-link"),
@@ -33,7 +33,15 @@ const els = {
   sampleBtnTunebat: document.getElementById("sample-btn-tunebat"),
   tabSettings: document.getElementById("tab-settings"),
   panelSettings: document.getElementById("panel-settings"),
-  settingLoudnorm: document.getElementById("setting-loudnorm"),
+  settingNormalizeLink: document.getElementById("setting-normalize-link"),
+  settingNormalizeSample: document.getElementById("setting-normalize-sample"),
+  settingNormalizeFile: document.getElementById("setting-normalize-file"),
+  settingTargetLufs: document.getElementById("setting-target-lufs"),
+  settingSaveAs: document.getElementById("setting-save-as"),
+  settingSubfolder: document.getElementById("setting-subfolder"),
+  settingStartTab: document.getElementById("setting-start-tab"),
+  settingPrefetch: document.getElementById("setting-prefetch"),
+  appVersion: document.getElementById("app-version"),
   settingsServerText: document.getElementById("settings-server-text"),
   settingsBtnRecheck: document.getElementById("settings-btn-recheck"),
   settingsBtnClearCache: document.getElementById("settings-btn-clear-cache"),
@@ -131,14 +139,19 @@ function formatDuration(seconds) {
   return `${m}:${s}`;
 }
 
+// Checks the local server and shows the result in Settings > Local server (dot + text).
 async function checkServer() {
+  els.serverDot.className = "dot";
+  els.settingsServerText.textContent = "Checking…";
   try {
     const res = await fetch(`${SERVER}/health`);
     if (!res.ok) throw new Error();
     els.serverDot.classList.add("ok");
+    els.settingsServerText.textContent = "Connected";
     return true;
   } catch {
     els.serverDot.classList.add("err");
+    els.settingsServerText.textContent = "Not connected";
     return false;
   }
 }
@@ -215,7 +228,7 @@ async function handleDirect(url) {
     const res = await fetch(`${SERVER}/api/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, loudnorm: await getLoudnormSetting() }),
+      body: JSON.stringify({ url, ...(await getAnalyzeOptions()) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
@@ -235,7 +248,7 @@ async function handleSpotify(spotifyUrl) {
     const res = await fetch(`${SERVER}/api/spotify-resolve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: spotifyUrl, loudnorm: await getLoudnormSetting() }),
+      body: JSON.stringify({ url: spotifyUrl, ...(await getAnalyzeOptions()) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
@@ -312,11 +325,10 @@ async function handleDownload(format) {
   els.progress.textContent = "Downloading and converting...";
 
   try {
-    const loudnorm = await getLoudnormSetting();
     const res = await fetch(`${SERVER}/api/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, format, loudnorm }),
+      body: JSON.stringify({ url, format, ...(await getNormalizeOptions("link")) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
@@ -326,11 +338,11 @@ async function handleDownload(format) {
     const filename = `${safeTitle}.${format}`;
     const fileUrl = `${SERVER}${data.downloadUrl}`;
 
-    const downloadId = await chrome.downloads.download({
-      url: fileUrl,
-      filename,
-      saveAs: false,
-    });
+    const downloadId = await startDownload(fileUrl, filename);
+    if (downloadId === null) {
+      els.progress.textContent = "Save cancelled.";
+      return;
+    }
 
     els.progress.textContent = "Download started — check Chrome's downloads bar.";
     trackDownloadCompletion(downloadId, fileUrl, filename, els.btnTunebat, currentCacheKey);
@@ -419,7 +431,9 @@ async function setupTabs() {
 
   // Remember whichever tab was open last, so reopening the popup lands back on it.
   const stored = await chrome.storage.local.get("activeTab");
-  switchTab(TAB_NAMES.includes(stored.activeTab) ? stored.activeTab : "link");
+  const { startTab } = await getSettings();
+  const wanted = startTab === "last" ? stored.activeTab : startTab;
+  switchTab(TAB_NAMES.includes(wanted) ? wanted : "link");
 }
 
 function switchTab(which) {
@@ -549,6 +563,7 @@ async function ensureStash() {
   const file = selectedFile;
   const res = await fetch(`${SERVER}/api/stash?ext=${fileExtension(file.name)}`, {
     method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
     body: file,
   });
   const data = await res.json();
@@ -558,11 +573,11 @@ async function ensureStash() {
   return stash;
 }
 
-async function convertStash(format, loudnorm) {
+async function convertStash(format, normalize) {
   const res = await fetch(`${SERVER}/api/convert-stash`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ stash: stash.name, format, loudnorm }),
+    body: JSON.stringify({ stash: stash.name, format, ...normalize }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Unknown error.");
@@ -578,14 +593,12 @@ async function handleFileConvert(format) {
     if (!stash) setFileMessage("Uploading…");
     await ensureStash();
     setFileMessage("Converting…");
-    const converted = await convertStash(format, await getLoudnormSetting());
+    const converted = await convertStash(format, await getNormalizeOptions("file"));
 
-    await chrome.downloads.download({
-      url: converted.url,
-      filename: `${fileBaseName(file.name)}.${format}`,
-      saveAs: false,
-    });
-    setFileMessage("Download started — check Chrome's downloads bar.");
+    const downloadId = await startDownload(converted.url, `${fileBaseName(file.name)}.${format}`);
+    setFileMessage(
+      downloadId === null ? "Save cancelled." : "Download started — check Chrome's downloads bar."
+    );
   } catch (err) {
     setFileMessage(describeError(err));
   } finally {
@@ -611,7 +624,7 @@ async function prepareTunebatFile() {
       button.dataset.filename = file.name;
     } else {
       button.textContent = "Converting…";
-      const converted = await convertStash("wav", false);
+      const converted = await convertStash("wav", { loudnorm: false });
       button.dataset.fileUrl = converted.url;
       button.dataset.filename = `${fileBaseName(file.name)}.wav`;
     }
@@ -974,9 +987,9 @@ async function handleSampleDownload(format) {
     if (sampleDurationSec > 0 && (trimStart > 0.05 || trimEnd < sampleDurationSec - 0.05)) {
       trimParams = `&trimStart=${trimStart.toFixed(2)}&trimEnd=${trimEnd.toFixed(2)}`;
     }
-    const loudnorm = await getLoudnormSetting();
+    const { loudnorm, targetLufs } = await getNormalizeOptions("sample");
     const res = await fetch(
-      `${SERVER}/api/upload-convert?format=${format}&sourceExt=webm&loudnorm=${loudnorm}${trimParams}`,
+      `${SERVER}/api/upload-convert?format=${format}&sourceExt=webm&loudnorm=${loudnorm}&targetLufs=${targetLufs}${trimParams}`,
       { method: "POST", body: lastSampleBlob }
     );
     const data = await res.json();
@@ -987,11 +1000,11 @@ async function handleSampleDownload(format) {
     const filename = `${safeName}.${format}`;
     const fileUrl = `${SERVER}${data.downloadUrl}`;
 
-    const downloadId = await chrome.downloads.download({
-      url: fileUrl,
-      filename,
-      saveAs: false,
-    });
+    const downloadId = await startDownload(fileUrl, filename);
+    if (downloadId === null) {
+      els.sampleProgress.textContent = "Save cancelled.";
+      return;
+    }
 
     els.sampleProgress.textContent = "Download started — check Chrome's downloads bar.";
     trackDownloadCompletion(downloadId, fileUrl, filename, els.sampleBtnTunebat, "__sample__");
@@ -1023,36 +1036,112 @@ async function handleDiscardRecording() {
 
 // --- Settings tab ---
 
-function getLoudnormSetting() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get("settings.loudnorm", (items) => {
-      resolve(items["settings.loudnorm"] !== false); // default: on
+const SETTING_KEYS = {
+  normalizeLink: "settings.normalize.link",
+  normalizeSample: "settings.normalize.sample",
+  normalizeFile: "settings.normalize.file",
+  targetLufs: "settings.targetLufs",
+  saveAs: "settings.saveAs",
+  subfolder: "settings.subfolder",
+  startTab: "settings.startTab",
+  prefetch: "settings.prefetch",
+};
+const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
+
+// All settings with their defaults applied. Link/Sample normalize by default (as they
+// always did); File conversions don't — converting a file shouldn't change its level
+// unless asked to.
+async function getSettings() {
+  const items = await chrome.storage.local.get([...Object.values(SETTING_KEYS), LEGACY_NORMALIZE_KEY]);
+  const legacy = items[LEGACY_NORMALIZE_KEY];
+  return {
+    normalize: {
+      link: items[SETTING_KEYS.normalizeLink] ?? legacy ?? true,
+      sample: items[SETTING_KEYS.normalizeSample] ?? legacy ?? true,
+      file: items[SETTING_KEYS.normalizeFile] ?? false,
+    },
+    targetLufs: Number(items[SETTING_KEYS.targetLufs]) || -16,
+    saveAs: items[SETTING_KEYS.saveAs] ?? false,
+    subfolder: items[SETTING_KEYS.subfolder] ?? "",
+    startTab: items[SETTING_KEYS.startTab] ?? "last",
+    prefetch: items[SETTING_KEYS.prefetch] ?? true,
+  };
+}
+
+// What the server needs to know about volume normalization for one category.
+async function getNormalizeOptions(category) {
+  const settings = await getSettings();
+  return { loudnorm: settings.normalize[category], targetLufs: settings.targetLufs };
+}
+
+// Options sent with an analyze request: the server prepares MP3 + WAV in the background
+// right away, so it needs to know how they'll be processed (and whether to do it at all).
+async function getAnalyzeOptions() {
+  const settings = await getSettings();
+  return {
+    loudnorm: settings.normalize.link,
+    targetLufs: settings.targetLufs,
+    prefetch: settings.prefetch,
+  };
+}
+
+// "Instrumentals/Client A" -> safe relative path inside the downloads folder ("" if empty).
+function cleanSubfolder(value) {
+  return String(value || "")
+    .split(/[\\/]+/)
+    .map((part) => part.replace(/[<>:"|?*\x00-\x1f]/g, "_").trim())
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+}
+
+// Starts a Chrome download honoring the Downloads settings. Returns the download id, or
+// null if the user cancelled the "save as" dialog.
+async function startDownload(url, filename) {
+  const { saveAs, subfolder } = await getSettings();
+  const folder = cleanSubfolder(subfolder);
+  try {
+    return await chrome.downloads.download({
+      url,
+      filename: folder ? `${folder}/${filename}` : filename,
+      saveAs,
     });
-  });
+  } catch (err) {
+    if (/cancel/i.test(err.message)) return null;
+    throw err;
+  }
 }
 
 async function initSettingsTab() {
-  const enabled = await getLoudnormSetting();
-  els.settingLoudnorm.checked = enabled;
-  els.settingLoudnorm.addEventListener("change", () => {
-    chrome.storage.local.set({ "settings.loudnorm": els.settingLoudnorm.checked });
-  });
+  const settings = await getSettings();
 
-  els.settingsBtnRecheck.addEventListener("click", updateSettingsServerStatus);
-  updateSettingsServerStatus();
+  els.settingNormalizeLink.checked = settings.normalize.link;
+  els.settingNormalizeSample.checked = settings.normalize.sample;
+  els.settingNormalizeFile.checked = settings.normalize.file;
+  els.settingTargetLufs.value = String(settings.targetLufs);
+  els.settingSaveAs.checked = settings.saveAs;
+  els.settingSubfolder.value = settings.subfolder;
+  els.settingStartTab.value = settings.startTab;
+  els.settingPrefetch.checked = settings.prefetch;
 
-  els.settingsBtnClearCache.addEventListener("click", handleClearCache);
-}
-
-async function updateSettingsServerStatus() {
-  els.settingsServerText.textContent = "Checking server…";
-  try {
-    const res = await fetch(`${SERVER}/health`);
-    if (!res.ok) throw new Error();
-    els.settingsServerText.textContent = `Connected — ${SERVER}`;
-  } catch {
-    els.settingsServerText.textContent = "Not connected — start the server (server && npm start)";
+  const checkbox = (el) => () => el.checked;
+  const value = (el) => () => el.value;
+  const bindings = [
+    [els.settingNormalizeLink, SETTING_KEYS.normalizeLink, "change", checkbox(els.settingNormalizeLink)],
+    [els.settingNormalizeSample, SETTING_KEYS.normalizeSample, "change", checkbox(els.settingNormalizeSample)],
+    [els.settingNormalizeFile, SETTING_KEYS.normalizeFile, "change", checkbox(els.settingNormalizeFile)],
+    [els.settingTargetLufs, SETTING_KEYS.targetLufs, "change", () => Number(els.settingTargetLufs.value)],
+    [els.settingSaveAs, SETTING_KEYS.saveAs, "change", checkbox(els.settingSaveAs)],
+    [els.settingSubfolder, SETTING_KEYS.subfolder, "input", () => els.settingSubfolder.value.trim()],
+    [els.settingStartTab, SETTING_KEYS.startTab, "change", value(els.settingStartTab)],
+    [els.settingPrefetch, SETTING_KEYS.prefetch, "change", checkbox(els.settingPrefetch)],
+  ];
+  for (const [el, key, eventName, read] of bindings) {
+    el.addEventListener(eventName, () => chrome.storage.local.set({ [key]: read() }));
   }
+
+  els.appVersion.textContent = chrome.runtime.getManifest?.().version || els.appVersion.textContent;
+  els.settingsBtnRecheck.addEventListener("click", checkServer);
+  els.settingsBtnClearCache.addEventListener("click", handleClearCache);
 }
 
 async function handleClearCache() {
