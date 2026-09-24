@@ -99,12 +99,18 @@ app.post(
       const trimEnd = req.query.trimEnd !== undefined ? Number(req.query.trimEnd) : undefined;
       const loudnorm = req.query.loudnorm !== "false";
       const targetLufs = req.query.targetLufs;
+      const fadeIn = req.query.fadeIn !== undefined ? Number(req.query.fadeIn) : undefined;
+      const fadeOut = req.query.fadeOut !== undefined ? Number(req.query.fadeOut) : undefined;
+      const duration = req.query.duration !== undefined ? Number(req.query.duration) : undefined;
 
       const filePath = await convertToFormat(sourcePath, format, DOWNLOADS_DIR, safeId, {
         trimStart,
         trimEnd,
         loudnorm,
         targetLufs,
+        fadeIn,
+        fadeOut,
+        duration,
       });
       const filename = path.basename(filePath);
       res.json({

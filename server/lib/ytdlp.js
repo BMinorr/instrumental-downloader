@@ -257,6 +257,35 @@ function trimArgs(options) {
   return args;
 }
 
+// Trim + fades as filters (not output -ss/-to): one timeline for all of them, so a fade-out
+// starts exactly `fadeOut` seconds before the *trimmed* end, whatever ffmpeg version runs.
+// `options.duration` = total length of the source, needed for a fade-out when not trimmed
+// (recorded webm has no duration metadata to probe).
+function editFilters(options) {
+  const filters = [];
+  const hasStart = typeof options.trimStart === "number" && options.trimStart > 0;
+  const hasEnd = typeof options.trimEnd === "number";
+  if (hasStart || hasEnd) {
+    const parts = [];
+    if (hasStart) parts.push(`start=${options.trimStart.toFixed(3)}`);
+    if (hasEnd) parts.push(`end=${options.trimEnd.toFixed(3)}`);
+    filters.push(`atrim=${parts.join(":")}`, "asetpts=PTS-STARTPTS");
+  }
+
+  const total = hasEnd ? options.trimEnd : Number(options.duration);
+  const length = Number.isFinite(total) && total > 0 ? total - (hasStart ? options.trimStart : 0) : null;
+  const fade = (value) => {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+    return Math.min(seconds, 30, length ? length / 2 : 30);
+  };
+  const fadeIn = fade(options.fadeIn);
+  const fadeOut = length ? fade(options.fadeOut) : 0; // can't place a fade-out without knowing the end
+  if (fadeIn) filters.push(`afade=t=in:st=0:d=${fadeIn.toFixed(3)}`);
+  if (fadeOut) filters.push(`afade=t=out:st=${(length - fadeOut).toFixed(3)}:d=${fadeOut.toFixed(3)}`);
+  return filters;
+}
+
 async function measureLoudness(sourcePath, options = {}) {
   const key = `${sourcePath}|${options.trimStart || 0}|${options.trimEnd ?? ""}`;
   if (loudnessCache.has(key)) return loudnessCache.get(key);
@@ -297,12 +326,14 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
   return dedupe(`convert:${targetPath}`, async () => {
     if (fs.existsSync(targetPath)) return targetPath;
 
-    const args = ["-y", "-i", sourcePath, ...trimArgs(options), "-vn"];
+    const args = ["-y", "-i", sourcePath, "-vn"];
 
+    const filters = editFilters(options);
     if (options.loudnorm !== false) {
       const filter = await loudnessFilter(sourcePath, options);
-      if (filter) args.push("-af", filter);
+      if (filter) filters.push(filter);
     }
+    if (filters.length) args.push("-af", filters.join(","));
 
     const spec = FORMATS[format];
     const hiRes = spec.hiRes ? await isHiResSource(sourcePath) : false;

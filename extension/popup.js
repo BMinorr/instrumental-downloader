@@ -27,6 +27,9 @@ const els = {
   sampleRecordBtn: document.getElementById("sample-record-btn"),
   sampleWaveform: document.getElementById("sample-waveform"),
   sampleFilename: document.getElementById("sample-filename"),
+  sampleBtnTrimSilence: document.getElementById("sample-btn-trim-silence"),
+  sampleFadeIn: document.getElementById("sample-fade-in"),
+  sampleFadeOut: document.getElementById("sample-fade-out"),
   sampleLevelMeter: document.getElementById("sample-level-meter"),
   sampleLevelFill: document.getElementById("sample-level-fill"),
   samplePlayBtn: document.getElementById("sample-play-btn"),
@@ -692,6 +695,7 @@ async function initSampleTab() {
   els.sampleBtnDiscard.addEventListener("click", handleDiscardRecording);
   els.sampleBtnTunebat.addEventListener("click", makeTunebatHandler(els.sampleBtnTunebat, els.sampleProgress));
   setupSamplePlayer();
+  els.sampleBtnTrimSilence.addEventListener("click", trimSilence);
 
   // Live level meter while recording: offscreen.js broadcasts a volume reading a
   // few times a second (see background.js/offscreen.js) — just reflect it here.
@@ -825,6 +829,7 @@ async function computeWaveformPeaks(blob) {
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     const channelData = audioBuffer.getChannelData(0);
     audioCtx.close();
+    silenceBounds = findSoundBounds(audioBuffer);
 
     const width = canvas.width;
     const samplesPerPixel = Math.max(1, Math.floor(channelData.length / width));
@@ -847,6 +852,55 @@ async function computeWaveformPeaks(blob) {
     // Waveform is a nice-to-have; failing to draw it shouldn't block playback/download.
     console.error("Waveform draw failed:", err);
   }
+}
+
+// First and last moments of actual sound, for the "Trim silence" button. Scans 20 ms
+// windows across all channels for a peak above -40 dBFS. Returns null if it's all silence.
+let silenceBounds = null; // { start, end } in seconds
+
+function findSoundBounds(audioBuffer) {
+  const THRESHOLD = 0.01; // -40 dBFS
+  const windowSize = Math.max(1, Math.round(audioBuffer.sampleRate * 0.02));
+  const channels = Array.from({ length: audioBuffer.numberOfChannels }, (_, i) => audioBuffer.getChannelData(i));
+  const length = audioBuffer.length;
+  const isLoud = (from) => {
+    const to = Math.min(from + windowSize, length);
+    for (const data of channels) {
+      for (let i = from; i < to; i++) if (Math.abs(data[i]) > THRESHOLD) return true;
+    }
+    return false;
+  };
+  let first = -1;
+  for (let i = 0; i < length; i += windowSize) if (isLoud(i)) { first = i; break; }
+  if (first === -1) return null;
+  let last = first;
+  for (let i = Math.floor((length - 1) / windowSize) * windowSize; i >= first; i -= windowSize) {
+    if (isLoud(i)) { last = Math.min(i + windowSize, length); break; }
+  }
+  return { start: first / audioBuffer.sampleRate, end: last / audioBuffer.sampleRate };
+}
+
+// Moves the trim handles to the sound, keeping a little air: 50 ms before, 150 ms after
+// (so a natural tail isn't clipped).
+function trimSilence() {
+  if (!silenceBounds || !sampleDurationSec) {
+    els.sampleProgress.classList.remove("hidden");
+    els.sampleProgress.textContent = "No sound detected to trim to.";
+    return;
+  }
+  const newStart = Math.max(0, silenceBounds.start - 0.05);
+  const newEnd = Math.min(sampleDurationSec, silenceBounds.end + 0.15);
+  const changed = newStart > trimStart + 0.05 || newEnd < trimEnd - 0.05;
+  if (changed) {
+    trimStart = Math.max(trimStart, newStart);
+    trimEnd = Math.min(trimEnd, newEnd);
+    els.sampleAudio.currentTime = trimStart;
+    renderWaveform(els.sampleAudio.duration ? trimStart / els.sampleAudio.duration : 0);
+  }
+  els.sampleProgress.classList.remove("hidden");
+  els.sampleProgress.textContent = changed
+    ? `Trimmed to ${formatTimer((trimEnd - trimStart) * 1000)} of sound.`
+    : "Nothing to trim — the clip already starts and ends on sound.";
 }
 
 // Trim handles: drag the edges of the waveform to cut the clip before export.
@@ -1018,9 +1072,15 @@ async function handleSampleDownload(format) {
     if (sampleDurationSec > 0 && (trimStart > 0.05 || trimEnd < sampleDurationSec - 0.05)) {
       trimParams = `&trimStart=${trimStart.toFixed(2)}&trimEnd=${trimEnd.toFixed(2)}`;
     }
+    // Fades: the server needs the source length to place a fade-out when nothing is trimmed.
+    const fadeIn = Number(els.sampleFadeIn.value) || 0;
+    const fadeOut = Number(els.sampleFadeOut.value) || 0;
+    const fadeParams = fadeIn || fadeOut
+      ? `&fadeIn=${fadeIn}&fadeOut=${fadeOut}&duration=${sampleDurationSec.toFixed(3)}`
+      : "";
     const { loudnorm, targetLufs } = await getNormalizeOptions("sample");
     const res = await fetch(
-      `${SERVER}/api/upload-convert?format=${format}&sourceExt=webm&loudnorm=${loudnorm}&targetLufs=${targetLufs}${trimParams}`,
+      `${SERVER}/api/upload-convert?format=${format}&sourceExt=webm&loudnorm=${loudnorm}&targetLufs=${targetLufs}${trimParams}${fadeParams}`,
       { method: "POST", body: lastSampleBlob }
     );
     const data = await res.json();
@@ -1053,6 +1113,9 @@ async function handleDiscardRecording() {
   trimStart = 0;
   trimEnd = 0;
   sampleDurationSec = 0;
+  silenceBounds = null;
+  els.sampleFadeIn.value = "0";
+  els.sampleFadeOut.value = "0";
   els.sampleResult.classList.add("hidden");
   els.sampleAudio.pause();
   els.sampleAudio.removeAttribute("src");

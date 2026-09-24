@@ -94,6 +94,22 @@
             <audio id="sample-audio" class="hidden"></audio>
           </div>
 
+          <div id="sample-edit-row">
+            <button id="sample-btn-trim-silence" class="edit-btn" title="Move the trim handles to the first and last audible sound">Trim silence</button>
+            <select id="sample-fade-in" class="edit-select" aria-label="Fade in">
+              <option value="0">Fade in: off</option>
+              <option value="0.5">Fade in: 0.5 s</option>
+              <option value="1">Fade in: 1 s</option>
+              <option value="2">Fade in: 2 s</option>
+            </select>
+            <select id="sample-fade-out" class="edit-select" aria-label="Fade out">
+              <option value="0">Fade out: off</option>
+              <option value="0.5">Fade out: 0.5 s</option>
+              <option value="1">Fade out: 1 s</option>
+              <option value="2">Fade out: 2 s</option>
+            </select>
+          </div>
+
           <div id="sample-format-options" class="format-grid"></div>
 
           <p id="sample-progress" class="hidden"></p>
