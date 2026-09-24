@@ -1,3 +1,5 @@
+importScripts("shared.js", "queue-engine.js");
+
 // Runs independently of the popup (which closes/reopens constantly), so download
 // completion is tracked reliably even if the user closes the popup mid-download.
 
@@ -28,6 +30,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     openInTunebat(message.fileUrl, message.filename)
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (message.type === "queue:add") {
+    queueAdd(message.items || [], message.format)
+      .then((added) => sendResponse({ ok: true, added }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (message.type === "queue:remove" || message.type === "queue:retry" || message.type === "queue:clear") {
+    const action =
+      message.type === "queue:remove" ? queueRemove(message.id)
+      : message.type === "queue:retry" ? queueRetry(message.id)
+      : queueClear(message.scope);
+    action.then(() => sendResponse({ ok: true })).catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   }
 
@@ -88,6 +106,8 @@ function setBadge(text, color) {
 }
 
 chrome.runtime.onInstalled.addListener(() => setBadge(""));
+chrome.runtime.onStartup.addListener(() => resumeQueue());
+resumeQueue(); // the worker may just have been restarted mid-batch
 
 // Keyboard shortcut (default Alt+Shift+R, changeable at chrome://extensions/shortcuts):
 // start/stop recording the current tab without opening the popup. The shortcut counts

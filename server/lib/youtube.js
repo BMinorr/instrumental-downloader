@@ -6,6 +6,39 @@ const ytdlp = require("./ytdlp");
 const YOUTUBE_URL_RE =
   /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=[\w-]{6,}\S*|shorts\/[\w-]{6,}\S*)|youtu\.be\/[\w-]{6,}\S*)$/i;
 
+// A YouTube playlist: /playlist?list=… or any watch link that carries a list=… parameter.
+const PLAYLIST_URL_RE =
+  /^https?:\/\/(www\.|m\.)?youtube\.com\/(playlist\?(\S*&)?list=[\w-]+|watch\?(\S*&)?v=[\w-]{6,}\S*[&?]list=[\w-]+)/i;
+const PLAYLIST_MAX = 100;
+
+function isValidPlaylistUrl(url) {
+  return typeof url === "string" && PLAYLIST_URL_RE.test(url.trim());
+}
+
+// The videos in a playlist, without extracting each one (fast: one flat listing).
+async function listPlaylist(url) {
+  if (!isValidPlaylistUrl(url)) throw new Error("Link de playlist YouTube invalid.");
+  const listId = url.match(/[?&]list=([\w-]+)/i)[1];
+  const { stdout } = await ytdlp.runYtDlp([
+    "--flat-playlist",
+    "--dump-single-json",
+    "--playlist-end", String(PLAYLIST_MAX),
+    // Always the plain playlist page, so a watch?v=…&list=… link lists the whole list.
+    `https://www.youtube.com/playlist?list=${listId}`,
+  ]);
+  const data = JSON.parse(stdout);
+  const items = (data.entries || [])
+    .filter((e) => e && e.id)
+    .map((e) => ({
+      id: e.id,
+      title: e.title || e.id,
+      duration: e.duration || null,
+      uploader: e.uploader || e.channel || "",
+      url: `https://www.youtube.com/watch?v=${e.id}`,
+    }));
+  return { title: data.title || "Playlist", items, truncated: (data.playlist_count || items.length) > items.length };
+}
+
 function isValidYoutubeUrl(url) {
   return typeof url === "string" && YOUTUBE_URL_RE.test(url.trim());
 }
@@ -42,4 +75,13 @@ function savedMeta(url, downloadsDir) {
   return ytdlp.savedMeta(downloadsDir, extractVideoId(url));
 }
 
-module.exports = { isValidYoutubeUrl, extractVideoId, analyze, prepare, downloadAudio, savedMeta };
+module.exports = {
+  isValidYoutubeUrl,
+  isValidPlaylistUrl,
+  listPlaylist,
+  extractVideoId,
+  analyze,
+  prepare,
+  downloadAudio,
+  savedMeta,
+};

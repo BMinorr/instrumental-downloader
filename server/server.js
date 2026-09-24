@@ -62,6 +62,16 @@ app.post("/api/ytdlp/update", async (req, res) => {
   }
 });
 
+// Lists a YouTube playlist's videos (Queue tab).
+app.post("/api/playlist", async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    res.json(await youtube.listPlaylist(url));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post("/api/analyze", async (req, res) => {
   try {
     const { url, loudnorm, targetLufs, tags, prefetch } = req.body || {};
