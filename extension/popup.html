@@ -13,6 +13,12 @@
         <button id="tab-sample" class="tab-btn">Sample</button>
       </div>
       <div id="header-right">
+        <button id="tab-history" class="icon-tab-btn" aria-label="History" title="History">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <polyline points="12 7 12 12 15.5 14"></polyline>
+          </svg>
+        </button>
         <button id="tab-settings" class="icon-tab-btn" aria-label="Settings" title="Settings">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -138,6 +144,12 @@
         </div>
       </div>
 
+      <div id="panel-history" class="hidden">
+        <p id="history-empty" class="meta">Nothing yet — files you download show up here.</p>
+        <ul id="history-list"></ul>
+        <button id="history-clear" class="secondary-btn hidden">Clear history</button>
+      </div>
+
       <div id="panel-settings" class="hidden">
         <section class="settings-section">
           <h2 class="settings-title">Volume normalization</h2>
@@ -236,13 +248,14 @@
         <section class="settings-section">
           <h2 class="settings-title">Data</h2>
           <button id="settings-btn-clear-cache" class="secondary-btn">Clear cached data</button>
-          <p class="meta">Forgets remembered track info, the active tab, and pending downloads. Keeps your settings and doesn't touch saved files.</p>
+          <p class="meta">Forgets remembered track info, the active tab, and pending downloads. Keeps your settings and history, and doesn't touch saved files.</p>
         </section>
 
         <p class="meta settings-version">Downloader v<span id="app-version">0.1.0</span> by <a href="https://bminorr.github.io/" target="_blank" rel="noopener noreferrer">B Minor</a></p>
       </div>
     </main>
 
+    <script src="history.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

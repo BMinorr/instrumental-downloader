@@ -45,6 +45,11 @@ const els = {
   settingStartTab: document.getElementById("setting-start-tab"),
   settingPrefetch: document.getElementById("setting-prefetch"),
   formatChips: document.getElementById("format-chips"),
+  tabHistory: document.getElementById("tab-history"),
+  panelHistory: document.getElementById("panel-history"),
+  historyList: document.getElementById("history-list"),
+  historyEmpty: document.getElementById("history-empty"),
+  historyClear: document.getElementById("history-clear"),
   pasteInput: document.getElementById("paste-input"),
   pasteGo: document.getElementById("paste-go"),
   recordingShortcut: document.getElementById("recording-shortcut"),
@@ -194,6 +199,7 @@ async function main() {
   els.btnTunebat.addEventListener("click", makeTunebatHandler(els.btnTunebat, els.progress));
   getSettings().then((settings) => applyVisibleFormats(settings.formats));
   initFileTab();
+  initHistoryTab();
   initSampleTab();
   initSettingsTab();
 
@@ -465,7 +471,12 @@ async function handleDownload(format) {
     const filename = `${safeTitle}.${format}`;
     const fileUrl = `${SERVER}${data.downloadUrl}`;
 
-    const downloadId = await startDownload(fileUrl, filename);
+    const downloadId = await startDownload(fileUrl, filename, {
+      source: "link",
+      title: title || "instrumental",
+      format,
+      mediaUrl: url,
+    });
     if (downloadId === null) {
       els.progress.textContent = "Save cancelled.";
       return;
@@ -553,12 +564,13 @@ function setCachedBundle(key, bundle) {
   chrome.storage.local.set({ [`bundle:${key}`]: bundle });
 }
 
-const TAB_NAMES = ["file", "link", "sample", "settings"];
+const TAB_NAMES = ["file", "link", "sample", "history", "settings"];
 
 async function setupTabs() {
   els.tabFile.addEventListener("click", () => switchTab("file"));
   els.tabLink.addEventListener("click", () => switchTab("link"));
   els.tabSample.addEventListener("click", () => switchTab("sample"));
+  els.tabHistory.addEventListener("click", () => switchTab("history"));
   els.tabSettings.addEventListener("click", () => switchTab("settings"));
 
   // Remember whichever tab was open last, so reopening the popup lands back on it.
@@ -569,8 +581,8 @@ async function setupTabs() {
 }
 
 function switchTab(which) {
-  const tabs = { file: els.tabFile, link: els.tabLink, sample: els.tabSample, settings: els.tabSettings };
-  const panels = { file: els.panelFile, link: els.panelLink, sample: els.panelSample, settings: els.panelSettings };
+  const tabs = { file: els.tabFile, link: els.tabLink, sample: els.tabSample, history: els.tabHistory, settings: els.tabSettings };
+  const panels = { file: els.panelFile, link: els.panelLink, sample: els.panelSample, history: els.panelHistory, settings: els.panelSettings };
   for (const name of TAB_NAMES) {
     const isActive = name === which;
     tabs[name].classList.toggle("active", isActive);
@@ -578,6 +590,7 @@ function switchTab(which) {
   }
   chrome.storage.local.set({ activeTab: which });
   if (which === "settings") refreshYtdlpStatus();
+  if (which === "history") renderHistory();
 }
 
 // --- File tab: pick/drop a local audio file, then convert it or analyze it on Tunebat ---
@@ -728,7 +741,11 @@ async function handleFileConvert(format) {
     setFileMessage("Converting…");
     const converted = await convertStash(format, await getNormalizeOptions("file"));
 
-    const downloadId = await startDownload(converted.url, `${fileBaseName(file.name)}.${format}`);
+    const downloadId = await startDownload(converted.url, `${fileBaseName(file.name)}.${format}`, {
+      source: "file",
+      title: fileBaseName(file.name),
+      format,
+    });
     setFileMessage(
       downloadId === null ? "Save cancelled." : "Download started — check Chrome's downloads bar."
     );
@@ -1193,7 +1210,7 @@ async function handleSampleDownload(format) {
     const filename = `${safeName}.${format}`;
     const fileUrl = `${SERVER}${data.downloadUrl}`;
 
-    const downloadId = await startDownload(fileUrl, filename);
+    const downloadId = await startDownload(fileUrl, filename, { source: "sample", title: safeName, format });
     if (downloadId === null) {
       els.sampleProgress.textContent = "Save cancelled.";
       return;
@@ -1301,19 +1318,21 @@ function cleanSubfolder(value) {
 
 // Starts a Chrome download honoring the Downloads settings. Returns the download id, or
 // null if the user cancelled the "save as" dialog.
-async function startDownload(url, filename) {
+async function startDownload(url, filename, meta = null) {
   const { saveAs, subfolder } = await getSettings();
   const folder = cleanSubfolder(subfolder);
+  const fullName = folder ? `${folder}/${filename}` : filename;
+  let downloadId;
   try {
-    return await chrome.downloads.download({
-      url,
-      filename: folder ? `${folder}/${filename}` : filename,
-      saveAs,
-    });
+    downloadId = await chrome.downloads.download({ url, filename: fullName, saveAs });
   } catch (err) {
     if (/cancel/i.test(err.message)) return null;
     throw err;
   }
+  if (meta) {
+    recordHistory({ ...meta, filename: fullName, fileUrl: url, downloadId }).catch(() => {});
+  }
+  return downloadId;
 }
 
 // One toggle chip per format; at least one must stay on. Changes apply to the grids at once.
@@ -1450,7 +1469,7 @@ async function initSettingsTab() {
 
 async function handleClearCache() {
   const all = await chrome.storage.local.get(null);
-  const keysToRemove = Object.keys(all).filter((k) => !k.startsWith("settings."));
+  const keysToRemove = Object.keys(all).filter((k) => !k.startsWith("settings.") && k !== HISTORY_KEY);
   if (keysToRemove.length) await chrome.storage.local.remove(keysToRemove);
 
   const original = els.settingsBtnClearCache.textContent;

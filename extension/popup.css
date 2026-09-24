@@ -61,7 +61,7 @@ header {
 #header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
 }
 
 .icon-tab-btn {
@@ -841,4 +841,75 @@ kbd {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+#history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-info {
+  min-width: 0;
+}
+
+.history-title {
+  margin: 0 0 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.history-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.history-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.history-btn:disabled:hover {
+  color: var(--muted);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.history-item.open .history-btn:last-child {
+  color: var(--accent-hover);
+  border-color: var(--accent);
+}
+
+.history-status,
+.history-formats {
+  grid-column: 1 / -1;
+}
+
+.history-formats {
+  margin-top: 4px;
+}
+
+#history-clear {
+  margin-top: 12px;
 }
