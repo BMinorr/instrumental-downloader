@@ -266,7 +266,7 @@ Settings → **File names**: numele fișierelor se compun din **blocuri** pe car
 
 ## Actualizare yt-dlp din extensie
 
-Settings → **yt-dlp** arată versiunea instalată și dacă există una mai nouă. „Update" o actualizează cu aceeași metodă cu care a fost instalat (`brew upgrade yt-dlp` pe Mac cu Homebrew, `winget upgrade` pe Windows cu winget, altfel `yt-dlp -U`). Când o descărcare eșuează cu o eroare de tip yt-dlp, mesajul te trimite aici. *(Actualizarea propriu-zisă n-a fost rulată în testele mele, ca să nu modific software-ul instalat; verificarea versiunii e testată.)*
+Settings → **Updates** arată, pe două rânduri, versiunea instalată și dacă există una mai nouă: **Downloader** (extensia + serverul, din Git) și **yt-dlp**. La yt-dlp, „Update" o actualizează cu aceeași metodă cu care a fost instalat (`brew upgrade yt-dlp` pe Mac cu Homebrew, `winget upgrade` pe Windows cu winget, altfel `yt-dlp -U`). Când o descărcare eșuează cu o eroare de tip yt-dlp, mesajul te trimite aici. *(Actualizarea propriu-zisă n-a fost rulată în testele mele, ca să nu modific software-ul instalat; verificarea versiunii e testată.)*
 
 ## Securitate
 
@@ -284,7 +284,7 @@ Rotița din colțul dreapta sus. Setările se salvează automat și se păstreaz
 
 **Downloads** — *Ask where to save each file*, *Subfolder* (`Downloads/<subfolder>`), *Tags & cover art*. **Formats shown** — ce formate apar în grile (minim unul). **General** — *Open on* (ultimul tab sau unul dintre cele vizibile), *Prepare MP3 & WAV in advance* (vezi „Viteza descărcării"), *Record shortcut*.
 
-**Local server** — indicatorul de status (punct + „Connected"/„Not connected", cu punct roșu pe rotiță cât e oprit), **yt-dlp** — versiunea + Update, **Data** — *Clear cached data* (uită paginile reținute și ultimul tab; **nu** atinge setările, istoricul, coada sau analizele în curs).
+**Local server** — indicatorul de status (punct + „Connected"/„Not connected", cu punct roșu pe rotiță cât e oprit), **Updates** — verificare automată (o dată la 6 ore, la deschiderea extensiei; un punct albastru pe rotiță când e ceva nou), *Check for updates now*, Update pentru Downloader și pentru yt-dlp, **Data** — *Clear cached data* (uită paginile reținute și ultimul tab; **nu** atinge setările, istoricul, coada sau analizele în curs).
 
 În subsolul panoului: versiunea și „by B Minor" (link către [bminorr.github.io](https://bminorr.github.io/)).
 
@@ -341,3 +341,10 @@ instrumental-downloader/
 │   └── update.sh / update.ps1   # git pull + npm install + restart server
 └── CLAUDE.md             # context proiect pentru Claude Code
 ```
+
+
+## Update-ul aplicației din Settings (Downloader)
+
+Settings → **Updates → Downloader**: serverul face `git fetch` și compară cu `origin` (la deschiderea extensiei, cel mult o dată la 6 ore, dacă „Check automatically" e pornit). Dacă există ceva nou apare **Update** (și un punct albastru pe rotiță). Apăsat, serverul rulează `git pull --ff-only`, `npm install` doar dacă s-a schimbat `package.json`, apoi **se repornește singur** (Mac: launchd îl repornește; Windows: un mic proces ajutător) și extensia se **reîncarcă singură** (`chrome.runtime.reload()`), deci nu mai e nevoie de ↻ manual. Nu merge dacă folderul nu e clonat cu Git sau are fișiere modificate de mână (mesajul spune asta). Prima dată, pe un calculator care n-are încă funcția, rulează o dată `update.sh` / `update.ps1`.
+
+Fiecare opțiune din Settings are un **ⓘ** mic după nume: click = o explicație de 1–2 propoziții.

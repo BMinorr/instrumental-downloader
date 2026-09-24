@@ -159,7 +159,7 @@ async function startupUpdateCheck() {
   const settings = await getSettings();
   const { [UPDATE_CHECK_KEY]: last } = await chrome.storage.local.get(UPDATE_CHECK_KEY);
   showUpdateDot(settings.autoUpdateCheck && !!last?.available);
-  if (settings.autoUpdateCheck && (!last || Date.now() - last.at > UPDATE_CHECK_EVERY_MS)) refreshUpdates({ force: true });
+  if (settings.autoUpdateCheck && (!last || Date.now() - last.at > UPDATE_CHECK_EVERY_MS)) refreshUpdates(); // no-op if Settings already checked
 }
 
 // Opening Settings shows the current versions; with auto-check off nothing goes to the network.

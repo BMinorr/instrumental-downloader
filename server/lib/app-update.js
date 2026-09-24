@@ -86,7 +86,13 @@ function update() {
   updating = (async () => {
     if (!fs.existsSync(path.join(ROOT, ".git"))) throw new Error("This copy was not installed with Git, so it can't update itself.");
     const before = await git(["rev-parse", "HEAD"]);
-    await git(["pull", "--ff-only", "--quiet"], { timeout: 60000 });
+    try {
+      await git(["pull", "--ff-only", "--quiet"], { timeout: 60000 });
+    } catch (err) {
+      if (/local changes|would be overwritten/i.test(err.message)) throw new Error("Files in the project folder were edited by hand, which blocks the update.");
+      if (/not possible to fast-forward|diverging/i.test(err.message)) throw new Error("This copy has its own commits, so it can't fast-forward.");
+      throw err;
+    }
     const after = await git(["rev-parse", "HEAD"]);
     lastFetch = { at: 0, ok: false };
     if (before === after) return { updated: false, extensionChanged: false, restarting: false };
