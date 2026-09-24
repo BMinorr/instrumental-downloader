@@ -152,19 +152,22 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-async function openInTunebat(fileUrl, filename) {
-  const res = await fetch(fileUrl);
-  if (!res.ok) throw new Error("Could not read the downloaded file.");
-  const buffer = await res.arrayBuffer();
-  const base64 = arrayBufferToBase64(buffer);
+const TUNEBAT_URL = "https://tunebat.com/Analyzer";
 
-  const tab = await chrome.tabs.create({ url: "https://tunebat.com/Analyzer" });
+async function openInTunebat(fileUrl, filename) {
+  // Fetch first, so a missing/unreachable file is reported to the still-open popup
+  // (once the Tunebat tab opens, the popup closes and can't show errors anymore).
+  const res = await fetch(fileUrl);
+  if (!res.ok) throw new Error("Could not read the file.");
+  const buffer = await res.arrayBuffer();
+
+  const tab = await chrome.tabs.create({ url: TUNEBAT_URL });
 
   // Bounded wait: if the tab never reports "complete" (slow network, blocked
   // request, etc.) we'd otherwise hang here forever with the button stuck on
   // "Opening Tunebat...". Fall through and attempt the injection anyway after
   // the timeout — worst case it fails with a clear error instead of a silent hang.
-  await Promise.race([
+  const pageLoaded = Promise.race([
     new Promise((resolve) => {
       function onUpdated(tabId, info) {
         if (tabId === tab.id && info.status === "complete") {
@@ -177,6 +180,11 @@ async function openInTunebat(fileUrl, filename) {
     new Promise((resolve) => setTimeout(resolve, 15000)),
   ]);
 
+  // Encoding a multi-MB file takes a moment — do it while the page loads instead of
+  // before/after (the "complete" listener above is already attached).
+  const base64 = arrayBufferToBase64(buffer);
+  await pageLoaded;
+
   // Give the page's own scripts a moment to finish mounting the upload widget.
   await new Promise((r) => setTimeout(r, 1000));
 
@@ -188,7 +196,7 @@ async function openInTunebat(fileUrl, filename) {
     // silently — the event fires but the app just ignores the "file".
     world: "MAIN",
     func: injectFileIntoPage,
-    args: [base64, filename],
+    args: [base64, filename, AUDIO_MIME_TYPES],
   });
 
   if (!result?.ok) {
@@ -196,20 +204,37 @@ async function openInTunebat(fileUrl, filename) {
   }
 }
 
+const AUDIO_MIME_TYPES = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  flac: "audio/flac",
+  aac: "audio/aac",
+  ogg: "audio/ogg",
+  m4a: "audio/m4a",
+};
+
 // Runs inside the Tunebat tab. Tunebat's uploader is a standard (hidden) file
 // input that picks up files via a native "change" event — so we build a real
 // File from the already-downloaded bytes and feed it in the same way a user's
 // own file picker selection would.
-function injectFileIntoPage(base64, filename) {
+// (It's passed its own copy of the MIME table: the function is serialized into the
+// page, so it can't see anything from this file's scope.)
+async function injectFileIntoPage(base64, filename, mimeTypes) {
   try {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    const mime = filename.toLowerCase().endsWith(".wav") ? "audio/wav" : "audio/mpeg";
-    const file = new File([bytes], filename, { type: mime });
+    const ext = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
+    const file = new File([bytes], filename, { type: mimeTypes[ext] || "audio/mpeg" });
 
-    const inputs = document.querySelectorAll('input[type="file"]');
+    // The widget normally exists by now (see the settle delay in openInTunebat), but
+    // on a slow page keep looking for a few seconds rather than failing outright.
+    let inputs = document.querySelectorAll('input[type="file"]');
+    for (let waited = 0; inputs.length === 0 && waited < 5000; waited += 200) {
+      await new Promise((r) => setTimeout(r, 200));
+      inputs = document.querySelectorAll('input[type="file"]');
+    }
     if (inputs.length === 0) {
       return { ok: false, reason: "No file input found on the page." };
     }

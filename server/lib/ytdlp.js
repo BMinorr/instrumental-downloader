@@ -49,6 +49,27 @@ function runFfmpeg(args) {
   });
 }
 
+// Two requests for the same track/target (e.g. the popup was closed and reopened
+// mid-download) share one job instead of racing on the same output files.
+const inflight = new Map();
+function dedupe(key, job) {
+  if (inflight.has(key)) return inflight.get(key);
+  const promise = job().finally(() => inflight.delete(key));
+  inflight.set(key, promise);
+  return promise;
+}
+
+// Only finished media files count as a cached source — yt-dlp leaves `.part` /
+// `.ytdl` / fragment files behind while downloading or after a failure, and
+// treating those as a cache hit would feed a truncated file to ffmpeg.
+const SOURCE_EXT_RE = /\.(webm|m4a|mp4|opus|ogg|mp3|aac|wav|flac|mkv|3gp)$/i;
+function findCachedSource(downloadsDir, safeId) {
+  const found = fs
+    .readdirSync(downloadsDir)
+    .find((f) => f.startsWith(`${safeId}.source.`) && SOURCE_EXT_RE.test(f));
+  return found ? path.join(downloadsDir, found) : null;
+}
+
 async function analyze(url, extraArgs = []) {
   const { stdout } = await runYtDlp([
     "--dump-json",
@@ -70,35 +91,36 @@ async function analyze(url, extraArgs = []) {
 // separat de formatul final — dacă ceri mai târziu și celălalt format (mp3 după wav, sau
 // invers), conversia se face local din sursa deja descărcată, fără să mai bată net-ul.
 async function downloadRawSource(url, downloadsDir, safeId, extraArgs) {
-  const existing = fs.readdirSync(downloadsDir).find((f) => f.startsWith(`${safeId}.source.`));
-  if (existing) return path.join(downloadsDir, existing);
+  return dedupe(`source:${safeId}`, async () => {
+    const existing = findCachedSource(downloadsDir, safeId);
+    if (existing) return existing;
 
-  const outputTemplate = path.join(downloadsDir, `${safeId}.source.%(ext)s`);
-  const args = [
-    "--no-playlist",
-    "-f", "bestaudio/best",
-    "--concurrent-fragments", "4", // descarcă fragmentele DASH în paralel — mai rapid pe conexiuni bune
-    "-o", outputTemplate,
-    "--print", "after_move:filepath",
-    "--no-simulate",
-    ...extraArgs,
-    url,
-  ];
+    const outputTemplate = path.join(downloadsDir, `${safeId}.source.%(ext)s`);
+    const args = [
+      "--no-playlist",
+      "-f", "bestaudio/best",
+      "--concurrent-fragments", "4", // descarcă fragmentele DASH în paralel — mai rapid pe conexiuni bune
+      "-o", outputTemplate,
+      "--print", "after_move:filepath",
+      "--no-simulate",
+      ...extraArgs,
+      url,
+    ];
 
-  const { stdout } = await runYtDlp(args);
-  const lines = stdout.trim().split("\n").filter(Boolean);
-  let filePath = lines[lines.length - 1];
+    const { stdout } = await runYtDlp(args);
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    let filePath = lines[lines.length - 1];
 
-  if (!filePath || !fs.existsSync(filePath)) {
-    const match = fs.readdirSync(downloadsDir).find((f) => f.startsWith(`${safeId}.source.`));
-    if (match) filePath = path.join(downloadsDir, match);
-  }
+    if (!filePath || !fs.existsSync(filePath)) {
+      filePath = findCachedSource(downloadsDir, safeId);
+    }
 
-  if (!filePath || !fs.existsSync(filePath)) {
-    throw new Error("Descărcarea a eșuat: fișierul sursă nu a fost găsit.");
-  }
+    if (!filePath || !fs.existsSync(filePath)) {
+      throw new Error("Descărcarea a eșuat: fișierul sursă nu a fost găsit.");
+    }
 
-  return filePath;
+    return filePath;
+  });
 }
 
 // `options.trimStart`/`options.trimEnd` (seconds) cut the clip before encoding —
@@ -109,33 +131,47 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
   const targetPath = path.join(downloadsDir, `${safeId}.${format}`);
   if (fs.existsSync(targetPath)) return targetPath;
 
-  const args = ["-y", "-i", sourcePath];
+  return dedupe(`convert:${targetPath}`, async () => {
+    if (fs.existsSync(targetPath)) return targetPath;
 
-  if (typeof options.trimStart === "number" && options.trimStart > 0) {
-    args.push("-ss", options.trimStart.toFixed(2));
-  }
-  if (typeof options.trimEnd === "number") {
-    args.push("-to", options.trimEnd.toFixed(2));
-  }
+    const args = ["-y", "-i", sourcePath];
 
-  args.push("-vn");
-  if (options.loudnorm !== false) {
-    args.push("-af", "loudnorm=I=-16:TP=-1.5:LRA=11");
-  }
+    if (typeof options.trimStart === "number" && options.trimStart > 0) {
+      args.push("-ss", options.trimStart.toFixed(2));
+    }
+    if (typeof options.trimEnd === "number") {
+      args.push("-to", options.trimEnd.toFixed(2));
+    }
 
-  if (format === "mp3") {
-    args.push("-codec:a", "libmp3lame", "-b:a", "320k");
-  } else {
-    args.push("-codec:a", "pcm_s16le");
-  }
-  args.push(targetPath);
+    args.push("-vn");
+    if (options.loudnorm !== false) {
+      args.push("-af", "loudnorm=I=-16:TP=-1.5:LRA=11");
+    }
 
-  await runFfmpeg(args);
+    if (format === "mp3") {
+      args.push("-codec:a", "libmp3lame", "-b:a", "320k");
+    } else {
+      args.push("-codec:a", "pcm_s16le");
+    }
 
-  if (!fs.existsSync(targetPath)) {
-    throw new Error("Conversia a eșuat: fișierul de ieșire nu a fost găsit.");
-  }
-  return targetPath;
+    // Encode to a temp name and rename on success: ffmpeg creates its output file
+    // immediately, so a failed/interrupted run would otherwise leave a truncated
+    // file at the final path that later requests would serve as a "cache hit".
+    const partialPath = path.join(downloadsDir, `${safeId}.partial.${format}`);
+    args.push(partialPath);
+
+    try {
+      await runFfmpeg(args);
+      if (!fs.existsSync(partialPath)) {
+        throw new Error("Conversia a eșuat: fișierul de ieșire nu a fost găsit.");
+      }
+      fs.renameSync(partialPath, targetPath);
+    } catch (err) {
+      fs.rmSync(partialPath, { force: true });
+      throw err;
+    }
+    return targetPath;
+  });
 }
 
 // Descarcă + extrage audio în formatul cerut, cache-uind atât sursa brută cât și

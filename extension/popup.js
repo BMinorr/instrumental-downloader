@@ -13,8 +13,10 @@ const els = {
   progress: document.getElementById("progress"),
   serverDot: document.getElementById("server-status"),
   btnTunebat: document.getElementById("btn-tunebat"),
+  tabFile: document.getElementById("tab-file"),
   tabLink: document.getElementById("tab-link"),
   tabSample: document.getElementById("tab-sample"),
+  panelFile: document.getElementById("panel-file"),
   panelLink: document.getElementById("panel-link"),
   panelSample: document.getElementById("panel-sample"),
   sampleStatus: document.getElementById("sample-status"),
@@ -38,6 +40,14 @@ const els = {
   settingsServerText: document.getElementById("settings-server-text"),
   settingsBtnRecheck: document.getElementById("settings-btn-recheck"),
   settingsBtnClearCache: document.getElementById("settings-btn-clear-cache"),
+  fileInput: document.getElementById("file-input"),
+  fileDropzone: document.getElementById("file-dropzone"),
+  fileDropzoneTitle: document.getElementById("file-dropzone-title"),
+  fileDropzoneSub: document.getElementById("file-dropzone-sub"),
+  fileDropzoneFormats: document.getElementById("file-dropzone-formats"),
+  fileClear: document.getElementById("file-clear"),
+  fileProgress: document.getElementById("file-progress"),
+  btnFileTunebat: document.getElementById("btn-file-tunebat"),
 };
 
 let currentCacheKey = null;
@@ -85,11 +95,15 @@ async function checkServer() {
 
 async function main() {
   els.btnTunebat.addEventListener("click", makeTunebatHandler(els.btnTunebat, els.progress));
-  await setupTabs();
+  initFileTab();
   initSampleTab();
   initSettingsTab();
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  // Tab restore (storage read) and the active-tab lookup don't depend on each other.
+  const [, [tab]] = await Promise.all([
+    setupTabs(),
+    chrome.tabs.query({ active: true, currentWindow: true }),
+  ]);
   const url = tab?.url || "";
   const platform = detectPlatform(url);
 
@@ -312,9 +326,10 @@ function setCachedBundle(key, bundle) {
   chrome.storage.local.set({ [`bundle:${key}`]: bundle });
 }
 
-const TAB_NAMES = ["link", "sample", "settings"];
+const TAB_NAMES = ["file", "link", "sample", "settings"];
 
 async function setupTabs() {
+  els.tabFile.addEventListener("click", () => switchTab("file"));
   els.tabLink.addEventListener("click", () => switchTab("link"));
   els.tabSample.addEventListener("click", () => switchTab("sample"));
   els.tabSettings.addEventListener("click", () => switchTab("settings"));
@@ -325,14 +340,138 @@ async function setupTabs() {
 }
 
 function switchTab(which) {
-  const tabs = { link: els.tabLink, sample: els.tabSample, settings: els.tabSettings };
-  const panels = { link: els.panelLink, sample: els.panelSample, settings: els.panelSettings };
+  const tabs = { file: els.tabFile, link: els.tabLink, sample: els.tabSample, settings: els.tabSettings };
+  const panels = { file: els.panelFile, link: els.panelLink, sample: els.panelSample, settings: els.panelSettings };
   for (const name of TAB_NAMES) {
     const isActive = name === which;
     tabs[name].classList.toggle("active", isActive);
     panels[name].classList.toggle("hidden", !isActive);
   }
   chrome.storage.local.set({ activeTab: which });
+}
+
+// --- File tab: pick/drop a local audio file, then send it to Tunebat ---
+// Nothing is converted or downloaded here — the file only goes to the local
+// server when "Analyze on Tunebat" is clicked, because the popup closes the moment
+// the Tunebat tab opens and the background worker has to fetch the bytes by URL.
+
+const FILE_EXTS = ["mp3", "wav", "flac", "aac", "ogg", "m4a"]; // what Tunebat's uploader accepts
+const FILE_MAX_BYTES = 100 * 1024 * 1024; // matches the server's /api/stash limit
+let selectedFile = null;
+
+function fileExtension(name) {
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function setFileError(message) {
+  els.fileProgress.textContent = message;
+  els.fileProgress.classList.toggle("hidden", !message);
+}
+
+function initFileTab() {
+  const openPicker = () => els.fileInput.click();
+  els.fileDropzone.addEventListener("click", openPicker);
+  els.fileDropzone.addEventListener("keydown", (e) => {
+    if (e.target !== els.fileDropzone) return; // ignore keys pressed on the inner clear button
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openPicker();
+    }
+  });
+  els.fileInput.addEventListener("change", () => {
+    selectFile(els.fileInput.files[0]);
+    els.fileInput.value = ""; // lets picking the same file again fire "change"
+  });
+
+  els.fileClear.addEventListener("click", (e) => {
+    e.stopPropagation(); // don't also open the picker
+    selectFile(null);
+  });
+
+  // Drag & drop. The popup is a normal page, so a file dropped anywhere outside
+  // the zone would navigate the popup to the file — block that everywhere.
+  els.fileDropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    els.fileDropzone.classList.add("dragover");
+  });
+  els.fileDropzone.addEventListener("dragleave", () => els.fileDropzone.classList.remove("dragover"));
+  els.fileDropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    els.fileDropzone.classList.remove("dragover");
+    selectFile(e.dataTransfer.files[0]);
+  });
+  document.addEventListener("dragover", (e) => e.preventDefault());
+  document.addEventListener("drop", (e) => e.preventDefault());
+
+  const openTunebat = makeTunebatHandler(els.btnFileTunebat, els.fileProgress);
+  els.btnFileTunebat.addEventListener("click", async () => {
+    if (selectedFile && !els.btnFileTunebat.dataset.fileUrl) {
+      const ok = await stashSelectedFile();
+      if (!ok) return;
+    }
+    openTunebat(); // no file selected -> just opens Tunebat
+  });
+}
+
+function selectFile(file) {
+  setFileError("");
+  delete els.btnFileTunebat.dataset.fileUrl;
+  delete els.btnFileTunebat.dataset.filename;
+
+  if (file) {
+    if (!FILE_EXTS.includes(fileExtension(file.name))) {
+      file = null;
+      setFileError(`Unsupported file. Use ${FILE_EXTS.map((x) => x.toUpperCase()).join(", ")}.`);
+    } else if (file.size > FILE_MAX_BYTES) {
+      file = null;
+      setFileError("File is too large (100 MB max).");
+    }
+  }
+
+  selectedFile = file;
+  els.fileDropzone.classList.toggle("has-file", !!file);
+  els.fileClear.classList.toggle("hidden", !file);
+  els.fileDropzoneTitle.textContent = file ? file.name : "Drop an audio file here";
+  els.fileDropzoneSub.textContent = file
+    ? `${formatBytes(file.size)} · click to choose another`
+    : "or click to browse";
+  els.fileDropzoneFormats.classList.toggle("hidden", !!file);
+}
+
+// Uploads the picked file to the local server (once per selection) and points the
+// Tunebat button at the stored copy. Returns false (with a message shown) on failure.
+async function stashSelectedFile() {
+  const button = els.btnFileTunebat;
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Uploading…";
+  try {
+    const res = await fetch(`${SERVER}/api/stash?ext=${fileExtension(selectedFile.name)}`, {
+      method: "POST",
+      body: selectedFile,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Unknown error.");
+    button.dataset.fileUrl = `${SERVER}${data.downloadUrl}`;
+    button.dataset.filename = selectedFile.name;
+    return true;
+  } catch (err) {
+    setFileError(
+      err instanceof TypeError
+        ? "Can't reach the local server. Is it running?"
+        : `Error: ${err.message}`
+    );
+    return false;
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
 }
 
 // --- Sample tab: record the audio playing in the current tab ---
@@ -474,10 +613,19 @@ function defaultSampleFilename() {
 // "unplayed" color split (like most audio-editor waveform players).
 let waveformPeaks = null;
 
-async function computeWaveformPeaks(audioBase64) {
+// The canvas is laid out at a fixed CSS size (popup body is 320px wide minus padding);
+// its backing store is scaled by devicePixelRatio so it stays crisp on retina screens.
+// Sizes are constants (not measured) because the panel may be hidden when this runs.
+const WAVEFORM_CSS_WIDTH = 288;
+const WAVEFORM_CSS_HEIGHT = 56;
+
+async function computeWaveformPeaks(blob) {
   const canvas = els.sampleWaveform;
   try {
-    const blob = base64ToBlob(audioBase64, "audio/webm");
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(WAVEFORM_CSS_WIDTH * dpr);
+    canvas.height = Math.round(WAVEFORM_CSS_HEIGHT * dpr);
+
     const arrayBuffer = await blob.arrayBuffer();
     const audioCtx = new AudioContext();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
@@ -549,9 +697,10 @@ function renderWaveform(progress) {
     if (startX > 0) ctx.fillRect(0, 0, startX, height);
     if (endX < width) ctx.fillRect(endX, 0, width - endX, height);
 
+    const handleW = Math.max(2, Math.round(2 * (window.devicePixelRatio || 1)));
     ctx.fillStyle = "#fff";
-    ctx.fillRect(Math.max(0, startX - 1), 0, 2, height);
-    ctx.fillRect(Math.min(width - 2, endX - 1), 0, 2, height);
+    ctx.fillRect(Math.max(0, startX - handleW / 2), 0, handleW, height);
+    ctx.fillRect(Math.min(width - handleW, endX - handleW / 2), 0, handleW, height);
   }
 }
 
@@ -568,8 +717,22 @@ function setupSamplePlayer() {
       els.sampleAudio.pause();
     }
   });
-  els.sampleAudio.addEventListener("play", () => els.samplePlayBtn.classList.add("playing"));
-  els.sampleAudio.addEventListener("pause", () => els.samplePlayBtn.classList.remove("playing"));
+  let playheadFrame = null;
+  els.sampleAudio.addEventListener("play", () => {
+    els.samplePlayBtn.classList.add("playing");
+    // "timeupdate" only fires ~4x/second, which makes the playhead visibly step;
+    // while playing, redraw every animation frame instead.
+    const loop = () => {
+      syncPlayhead();
+      if (!els.sampleAudio.paused) playheadFrame = requestAnimationFrame(loop);
+    };
+    cancelAnimationFrame(playheadFrame);
+    playheadFrame = requestAnimationFrame(loop);
+  });
+  els.sampleAudio.addEventListener("pause", () => {
+    els.samplePlayBtn.classList.remove("playing");
+    cancelAnimationFrame(playheadFrame);
+  });
   els.sampleAudio.addEventListener("loadedmetadata", () => {
     sampleDurationSec = els.sampleAudio.duration || 0;
     trimStart = 0;
@@ -580,7 +743,7 @@ function setupSamplePlayer() {
     els.samplePlayBtn.classList.remove("playing");
     renderWaveform(0);
   });
-  els.sampleAudio.addEventListener("timeupdate", () => {
+  function syncPlayhead() {
     if (!els.sampleAudio.duration) return;
     if (trimEnd > 0 && els.sampleAudio.currentTime >= trimEnd) {
       els.sampleAudio.pause();
@@ -589,7 +752,8 @@ function setupSamplePlayer() {
       return;
     }
     renderWaveform(els.sampleAudio.currentTime / els.sampleAudio.duration);
-  });
+  }
+  els.sampleAudio.addEventListener("timeupdate", syncPlayhead); // covers seeking while paused
 
   els.sampleWaveform.addEventListener("mousedown", (e) => {
     if (!sampleDurationSec) return;
@@ -641,7 +805,7 @@ function showSampleResult(audioBase64, durationMs) {
   const durationLabel = typeof durationMs === "number" ? ` (${formatTimer(durationMs)})` : "";
   els.sampleStatus.textContent = `Recording ready${durationLabel}.`;
 
-  computeWaveformPeaks(audioBase64);
+  computeWaveformPeaks(lastSampleBlob);
 }
 
 async function handleSampleDownload(format) {

@@ -32,7 +32,7 @@ header {
 
 #tabs {
   display: flex;
-  gap: 4px;
+  gap: 12px;
 }
 
 .tab-btn {
@@ -78,6 +78,93 @@ header {
 .icon-tab-btn.active {
   color: var(--accent);
   background: rgba(108, 92, 231, 0.15);
+}
+
+#file-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 118px;
+  padding: 16px 12px;
+  text-align: center;
+  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+#file-dropzone:hover,
+#file-dropzone:focus-visible,
+#file-dropzone.dragover {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(108, 92, 231, 0.1);
+}
+
+#file-dropzone.dragover {
+  border-style: solid;
+}
+
+#file-dropzone.has-file {
+  border-style: solid;
+  border-color: rgba(108, 92, 231, 0.55);
+}
+
+#file-dropzone.has-file .dropzone-icon {
+  color: var(--accent);
+}
+
+.dropzone-icon {
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.dropzone-title {
+  margin: 0;
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropzone-clear {
+  appearance: none;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dropzone-clear:hover {
+  color: var(--err);
+  background: rgba(248, 113, 113, 0.15);
+}
+
+#file-progress {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#btn-file-tunebat {
+  margin-top: 10px;
 }
 
 .settings-section {

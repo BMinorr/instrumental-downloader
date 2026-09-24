@@ -103,6 +103,29 @@ app.post(
   }
 );
 
+// Stores a file the user picked in the File tab so the extension's background
+// worker can fetch it back by URL (same path the downloaded tracks take to reach
+// Tunebat) — the popup itself closes as soon as the Tunebat tab opens, so it
+// can't hand the bytes over directly. No conversion: the file is served as-is.
+const STASH_EXTS = new Set(["mp3", "wav", "flac", "aac", "ogg", "m4a"]);
+app.post(
+  "/api/stash",
+  express.raw({ type: "*/*", limit: "100mb" }),
+  (req, res) => {
+    try {
+      const ext = String(req.query.ext || "").toLowerCase();
+      if (!STASH_EXTS.has(ext)) throw new Error("Tip de fișier neacceptat.");
+      if (!req.body || !req.body.length) throw new Error("Fișierul este gol.");
+
+      const filename = `stash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      fs.writeFileSync(path.join(DOWNLOADS_DIR, filename), req.body);
+      res.json({ downloadUrl: `/files/${encodeURIComponent(filename)}`, filename });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
 // Serve the converted files so the extension can trigger a native browser download.
 app.get("/files/:filename", (req, res) => {
   const filename = path.basename(req.params.filename); // strip any path traversal
@@ -118,7 +141,11 @@ setInterval(() => {
   const cutoff = Date.now() - 60 * 60 * 1000;
   for (const f of fs.readdirSync(DOWNLOADS_DIR)) {
     const fp = path.join(DOWNLOADS_DIR, f);
-    if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp);
+    try {
+      if (fs.statSync(fp).mtimeMs < cutoff) fs.rmSync(fp, { force: true });
+    } catch {
+      // File vanished or is locked (Windows) — skip it, next sweep retries.
+    }
   }
 }, 15 * 60 * 1000);
 

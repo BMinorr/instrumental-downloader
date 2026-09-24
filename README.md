@@ -7,7 +7,7 @@ Extensie Chrome + server local pentru descărcarea instrumentalelor pe care ți 
 **Faza 3 (gata):** Instagram — Story, Reel și Post, cu autentificare din Chrome (vezi mai jos).
 **Faza 4 (gata):** tab „Sample" — înregistrează audio-ul care redă din tab-ul curent (ex. un beat pe care clientul ți-l cântă live într-un apel video), apoi descarcă-l ca MP3 320kbps sau WAV.
 
-Extensia are două tab-uri: **Link** (fluxul YouTube/Spotify/Instagram de mai sus) și **Sample** (înregistrare directă din tab). Detecția de BPM/Key nu mai e integrată în extensie (rezultate inconsistente) — în schimb, după ce o piesă e efectiv descărcată, apare un buton **„Analyze BPM & Key on Tunebat"** care deschide [tunebat.com/Analyzer](https://tunebat.com/Analyzer) într-un tab nou cu **fișierul deja inserat automat** acolo.
+Extensia are trei tab-uri principale: **File** (alegi/tragi un fișier audio local și îl trimiți în Tunebat), **Link** (fluxul YouTube/Spotify/Instagram de mai sus — tab-ul implicit) și **Sample** (înregistrare directă din tab), plus **Settings**. Detecția de BPM/Key nu mai e integrată în extensie (rezultate inconsistente) — în schimb, după ce o piesă e efectiv descărcată, apare un buton **„Analyze BPM & Key on Tunebat"** care deschide [tunebat.com/Analyzer](https://tunebat.com/Analyzer) într-un tab nou cu **fișierul deja inserat automat** acolo.
 
 ## De ce ai nevoie de un server local
 
@@ -193,6 +193,16 @@ Pentru cazurile în care clientul nu-ți trimite un link, ci îți cântă/redă
 
 **De reținut:** cât timp înregistrezi, Chrome arată un indicator vizual (o iconiță) pe tab-ul capturat, ca să fie mereu clar când ceva e înregistrat.
 
+## Tab-ul File (fișier local → Tunebat)
+
+Pentru un instrumental pe care îl ai deja pe disc (trimis de client pe WhatsApp/mail/Drive):
+
+1. Deschide extensia → tab-ul **File**
+2. Trage fișierul în zonă (drag & drop) **sau** click în zonă și alege-l din file explorer — formate acceptate: MP3, WAV, FLAC, AAC, OGG, M4A (exact cele pe care le primește Tunebat), maxim 100 MB
+3. Click pe **„Analyze BPM & Key on Tunebat"** — se deschide Tunebat cu fișierul deja inserat. Fără fișier ales, butonul doar deschide Tunebat gol.
+
+Fișierul se copiază pe serverul local (`POST /api/stash`, se șterge automat după 1 oră) doar în momentul click-ului pe Tunebat — popup-ul se închide imediat ce se deschide tab-ul Tunebat, deci service worker-ul trebuie să-l preia prin URL, exact ca la piesele descărcate. Nu se convertește și nu se descarcă nimic.
+
 ## Tab-ul Settings
 
 Iconița de rotiță din colțul dreapta sus (lângă bulina de status server) deschide un al treilea tab:
@@ -242,7 +252,7 @@ instrumental-downloader/
 ├── extension/            # Extensie Chrome (Manifest V3)
 │   ├── manifest.json
 │   ├── icons/             # icon-ul extensiei (16/32/48/128px)
-│   ├── popup.html/css/js  # tab-uri Link + Sample + Settings
+│   ├── popup.html/css/js  # tab-uri File + Link + Sample + Settings
 │   ├── background.js     # service worker: descărcări, Tunebat, coordonare Sample
 │   └── offscreen.html/js # document offscreen: face efectiv înregistrarea audio
 ├── autostart/            # Scripturi de pornire automată la login + update

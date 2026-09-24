@@ -11,9 +11,9 @@ Proiect al unui proprietar de studio de muzică: extensie Chrome + server local 
 
 ## Arhitectură
 
-- `extension/` — Chrome Manifest V3. `popup.*` (3 tab-uri: Link, Sample, Settings), `background.js` (service worker: descărcări, Tunebat, coordonare Sample), `offscreen.*` (înregistrarea audio din tab, supraviețuiește închiderii popup-ului).
+- `extension/` — Chrome Manifest V3. `popup.*` (tab-uri: File, Link, Sample, Settings; Link e implicit la prima deschidere, apoi se ține minte ultimul tab), `background.js` (service worker: descărcări, Tunebat, coordonare Sample), `offscreen.*` (înregistrarea audio din tab, supraviețuiește închiderii popup-ului).
 - `server/` — Express pe `127.0.0.1:5177`, apelează `yt-dlp` și `ffmpeg` cu `spawn` și array de argumente (niciodată concatenare de string → fără command injection).
-  - `POST /api/analyze`, `POST /api/download` (`{url, format, loudnorm}`), `POST /api/spotify-resolve`, `POST /api/upload-convert` (bytes bruți + query `format`, `trimStart`, `trimEnd`, `loudnorm`), `GET /files/:name`, `GET /health`.
+  - `POST /api/analyze`, `POST /api/download` (`{url, format, loudnorm}`), `POST /api/spotify-resolve`, `POST /api/upload-convert` (bytes bruți + query `format`, `trimStart`, `trimEnd`, `loudnorm`), `POST /api/stash?ext=` (fișier local din tab-ul File, servit înapoi ca-atare pentru Tunebat), `GET /files/:name`, `GET /health`.
   - `lib/ytdlp.js` (logică comună), `youtube.js`, `instagram.js`, `spotify.js`.
 - `autostart/` — pornire automată la login: `mac/` (launchd), `windows/` (Task Scheduler + wrapper `.vbs` ascuns). `update.sh` / `update.ps1` fac `git pull` + `npm install` + repornesc serverul.
 
@@ -24,6 +24,8 @@ Proiect al unui proprietar de studio de muzică: extensie Chrome + server local 
 - **Spotify**: fără DRM-circumvention. Se citesc titlul/artistul de pe pagină și se caută pe YouTube (`ytsearch1:`). Potrivirea e automată, deci UI-ul arată titlul găsit.
 - **Instagram**: `--cookies-from-browser chrome` (sesiunea deja logată în Chrome pe acel PC).
 - **Sample (tab capture)**: `chrome.tabCapture` + offscreen document + `MediaRecorder` (webm/opus). Blob-ul rămâne în memoria offscreen document-ului, **nu** în `chrome.storage.session` (limită 10MB). Popup-ul cere înregistrarea înapoi doar la nevoie (`sample:getLast`). Ultimul tab activ (Link/Sample/Settings) se ține minte în `chrome.storage.local`.
+- **Tab-ul File**: dropzone + file picker; formate limitate la ce acceptă Tunebat (mp3/wav/flac/aac/ogg/m4a), max 100MB. Fișierul urcă pe server (`/api/stash`) abia la click pe Tunebat, apoi `background.js` îl ia prin URL — același drum ca piesele descărcate (popup-ul se închide când se deschide tab-ul Tunebat, deci nu poate transmite bytes direct). **De verificat pe Mac/Windows real**: Chrome poate închide popup-ul când se deschide dialogul de fișiere sau când tragi un fișier din alt fereastră; dacă se întâmplă, soluția e o fereastră detașată (`chrome.windows.create`), nu popup.
+- **Cache server**: ffmpeg scrie întâi în `<id>.partial.<ext>` și face rename la final (un fișier trunchiat nu mai ajunge „cache hit"); sursele yt-dlp se recunosc doar după extensie finală (nu `.part`); cererile identice simultane partajează același job (`dedupe` în `ytdlp.js`).
 - **Trim** pe waveform: `-ss`/`-to` puse **după** `-i` (folosesc timeline-ul absolut al sursei — verificat empiric).
 - **Loudnorm** (`loudnorm=I=-16:TP=-1.5:LRA=11`) e implicit ON, cu toggle în Settings (`chrome.storage.local["settings.loudnorm"]`). Fișierul cache pentru varianta fără normalizare are sufixul `-raw`; sursa brută e partajată între ambele variante.
 - **Tab-ul Settings** stă în dreapta, iar bulina de status a serverului rămâne cel mai în dreapta element din header.
