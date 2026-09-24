@@ -395,7 +395,8 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
     }
     if (filters.length) args.push("-af", filters.join(","));
 
-    const hiRes = spec.hiRes ? await isHiResSource(sourcePath) : false;
+    if (options.compact) args.push("-ac", "1", "-ar", "22050"); // analysis copies only (see /api/analysis-source)
+    const hiRes = spec.hiRes && !options.compact ? await isHiResSource(sourcePath) : false;
     args.push(...spec.args(hiRes));
     if (options.meta) {
       for (const [key, value] of Object.entries(options.meta)) {

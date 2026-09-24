@@ -197,6 +197,14 @@
             <span>Separator</span>
             <select id="setting-name-separator" class="settings-input"></select>
           </div>
+          <div class="settings-row">
+            <span>BPM as</span>
+            <select id="setting-bpm-style" class="settings-input"></select>
+          </div>
+          <div class="settings-row">
+            <span>Key as</span>
+            <select id="setting-key-style" class="settings-input"></select>
+          </div>
           <div id="name-custom-row" class="settings-row hidden">
             <span>Custom text</span>
             <input id="setting-name-custom" type="text" class="settings-input" placeholder="e.g. FREE" spellcheck="false" />
@@ -209,8 +217,16 @@
         <section class="settings-section">
           <h2 class="settings-title">BPM &amp; key (Tunebat)</h2>
           <label class="settings-row">
-            <span>Analyze after each download</span>
-            <span class="switch"><input type="checkbox" id="setting-analyze" /><span class="switch-track"></span></span>
+            <span>Link downloads</span>
+            <span class="switch"><input type="checkbox" id="setting-analyze-link" /><span class="switch-track"></span></span>
+          </label>
+          <label class="settings-row">
+            <span>Sample recordings</span>
+            <span class="switch"><input type="checkbox" id="setting-analyze-sample" /><span class="switch-track"></span></span>
+          </label>
+          <label class="settings-row">
+            <span>Files, when added</span>
+            <span class="switch"><input type="checkbox" id="setting-analyze-file" /><span class="switch-track"></span></span>
           </label>
           <label class="settings-row">
             <span>Delete the first copy</span>
@@ -220,7 +236,7 @@
             <span>Close the Tunebat tab when done</span>
             <span class="switch"><input type="checkbox" id="setting-close-tunebat" /><span class="switch-track"></span></span>
           </label>
-          <p class="meta">Every download is sent to Tunebat in a background tab (your current tab stays as it is). The BPM and key found there go into the file name and tags: the file is saved again under its final name and the first copy is deleted once that finishes. Not applied when “Ask where to save” is on.</p>
+          <p class="meta">Sent to Tunebat in a background tab — yours stays as it is. BPM and key go into the file name and tags: the file is saved again under its final name and the first copy is deleted once that finishes (not when “Ask where to save” is on). A file added in the File tab is analyzed right away, so its converted copy is named with them at once.</p>
         </section>
 
         <section class="settings-section">
@@ -257,6 +273,14 @@
           <div class="settings-row">
             <span>Open on</span>
             <select id="setting-start-tab" class="settings-input"></select>
+          </div>
+          <div class="settings-row">
+            <span>Queue: downloads at once</span>
+            <select id="setting-queue-concurrency" class="settings-input">
+              <option value="1">1 (gentlest)</option>
+              <option value="2">2 (default)</option>
+              <option value="3">3 (fastest)</option>
+            </select>
           </div>
           <label class="settings-row">
             <span>Prepare MP3 &amp; WAV in advance</span>
@@ -300,6 +324,7 @@
         <section class="settings-section">
           <h2 class="settings-title">Data</h2>
           <button id="settings-btn-clear-cache" class="secondary-btn">Clear cached data</button>
+          <button id="settings-btn-reset" class="secondary-btn danger">Reset settings to defaults</button>
           <p class="meta">Forgets remembered track info and the last active tab. Keeps your settings, history and download queue, and doesn't touch saved files.</p>
         </section>
 

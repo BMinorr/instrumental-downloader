@@ -31,12 +31,21 @@ const NAME_BLOCKS = [
   { id: "bpm", label: "BPM", example: "140bpm" },
   { id: "key", label: "Key", example: "Am" },
   { id: "producer", label: "Producer", example: "Beatmaker" },
-  { id: "camelot", label: "Camelot", example: "8A" },
   { id: "date", label: "Date", example: "2026-09-25" },
   { id: "format", label: "Format", example: "MP3" },
   { id: "custom", label: "Custom text", example: "FREE" },
 ];
 const DEFAULT_NAME_BLOCKS = ["title", "bpm", "key", "producer"];
+// How BPM and key are written into names (Settings > File names).
+const BPM_STYLES = [
+  { value: "suffix", label: "140bpm", format: (n) => `${n}bpm` },
+  { value: "spaced", label: "140 BPM", format: (n) => `${n} BPM` },
+  { value: "plain", label: "140", format: (n) => String(n) },
+];
+const KEY_STYLES = [
+  { value: "short", label: "Am · F#" },
+  { value: "long", label: "A minor · F# major" },
+];
 const NAME_SEPARATORS = [
   { value: " - ", label: "Beat - 140bpm" },
   { value: "_", label: "Beat_140bpm" },
@@ -48,6 +57,7 @@ const QUEUE_KEY = "queue"; // download queue (see queue-engine.js / tab-link.js)
 const HISTORY_KEY = "history";
 const HISTORY_MAX = 30;
 const ANALYSIS_JOBS_KEY = "analysisJobs"; // pending Tunebat analyses (see analysis-engine.js)
+const FILE_ANALYSIS_PREFIX = "analysisFile:"; // + server file URL: result for a File-tab file, before any conversion
 
 function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -99,18 +109,25 @@ const SETTING_KEYS = {
   nameCustom: "settings.nameCustom",
   tabOrder: "settings.tabOrder",
   tabsHidden: "settings.tabsHidden",
-  analyze: "settings.analyze",
+  analyzeLink: "settings.analyze.link",
+  analyzeSample: "settings.analyze.sample",
+  analyzeFile: "settings.analyze.file",
+  bpmStyle: "settings.bpmStyle",
+  keyStyle: "settings.keyStyle",
   deleteOriginal: "settings.deleteOriginal",
   closeTunebatTab: "settings.closeTunebatTab",
+  queueConcurrency: "settings.queueConcurrency",
 };
 const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
+const LEGACY_ANALYZE_KEY = "settings.analyze"; // ditto for the Tunebat analysis
 
 // All settings with their defaults applied. Link/Sample normalize by default (as they
 // always did); File conversions don't — converting a file shouldn't change its level
 // unless asked to.
 async function getSettings() {
-  const items = await chrome.storage.local.get([...Object.values(SETTING_KEYS), LEGACY_NORMALIZE_KEY]);
+  const items = await chrome.storage.local.get([...Object.values(SETTING_KEYS), LEGACY_NORMALIZE_KEY, LEGACY_ANALYZE_KEY]);
   const legacy = items[LEGACY_NORMALIZE_KEY];
+  const legacyAnalyze = items[LEGACY_ANALYZE_KEY];
   const tabOrder = validTabOrder(items[SETTING_KEYS.tabOrder]);
   const hidden = Array.isArray(items[SETTING_KEYS.tabsHidden]) ? items[SETTING_KEYS.tabsHidden] : [];
   const visibleTabs = tabOrder.filter((id) => !hidden.includes(id));
@@ -132,9 +149,18 @@ async function getSettings() {
     nameCustom: items[SETTING_KEYS.nameCustom] ?? "",
     tabOrder,
     visibleTabs: visibleTabs.length ? visibleTabs : [tabOrder[0]], // never zero tabs
-    analyze: items[SETTING_KEYS.analyze] ?? true,
+    // Tunebat analysis per source: downloads from a link, exported recordings, and files
+    // dropped in the File tab (analyzed the moment they're added).
+    analyze: {
+      link: items[SETTING_KEYS.analyzeLink] ?? legacyAnalyze ?? true,
+      sample: items[SETTING_KEYS.analyzeSample] ?? legacyAnalyze ?? true,
+      file: items[SETTING_KEYS.analyzeFile] ?? legacyAnalyze ?? true,
+    },
+    bpmStyle: BPM_STYLES.some((b) => b.value === items[SETTING_KEYS.bpmStyle]) ? items[SETTING_KEYS.bpmStyle] : "suffix",
+    keyStyle: KEY_STYLES.some((k) => k.value === items[SETTING_KEYS.keyStyle]) ? items[SETTING_KEYS.keyStyle] : "short",
     deleteOriginal: items[SETTING_KEYS.deleteOriginal] ?? true,
     closeTunebatTab: items[SETTING_KEYS.closeTunebatTab] ?? true,
+    queueConcurrency: [1, 2, 3].includes(Number(items[SETTING_KEYS.queueConcurrency])) ? Number(items[SETTING_KEYS.queueConcurrency]) : 2,
   };
 }
 
@@ -191,16 +217,16 @@ function shortKey(key) {
 }
 
 // The text of each name block for one file. `values`: title, producer, format, and — once
-// the Tunebat analysis is in — bpm (number), key ("A minor"), camelot ("8A").
+// the Tunebat analysis is in — bpm (number) and key ("A minor").
 function nameBlockValues(values, settings) {
   const pad = (n) => String(n).padStart(2, "0");
   const now = new Date();
+  const bpmStyle = BPM_STYLES.find((b) => b.value === settings.bpmStyle) || BPM_STYLES[0];
   return {
     title: values.title || "",
     producer: values.producer || "",
-    bpm: values.bpm ? `${Math.round(values.bpm)}bpm` : "",
-    key: shortKey(values.key) || "",
-    camelot: values.camelot || "",
+    bpm: values.bpm ? bpmStyle.format(Math.round(values.bpm)) : "",
+    key: settings.keyStyle === "long" ? String(values.key || "").trim() : shortKey(values.key),
     date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
     format: String(values.format || "").toUpperCase(),
     custom: settings.nameCustom || "",
@@ -262,8 +288,17 @@ async function startDownload(url, filename, meta = null, { forceNoDialog = false
   }
   if (meta) {
     const historyId = newId();
-    const analyze = settings.analyze && meta.analyze !== false;
-    await recordHistory({ ...meta, id: historyId, filename: fullName, fileUrl: url, downloadId, analysis: analyze ? "pending" : undefined });
+    // BPM/key already known (a File-tab file analyzed when it was added): nothing to wait for.
+    const known = meta.bpm && meta.key;
+    const analyze = !known && settings.analyze[meta.source] && meta.analyze !== false;
+    await recordHistory({
+      ...meta,
+      id: historyId,
+      filename: fullName,
+      fileUrl: url,
+      downloadId,
+      analysis: known ? "done" : analyze ? "pending" : undefined,
+    });
     if (analyze) {
       requestAnalysis({ ...meta, id: historyId, historyId, fileUrl: url, downloadId, filename: fullName }).catch(() => {});
     }

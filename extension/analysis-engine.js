@@ -1,6 +1,6 @@
 // Automatic BPM/key analysis, run by the background worker after every download:
 //   1. the downloaded file is fed to Tunebat in a background tab (the user's tab is left alone),
-//   2. BPM / key / Camelot are read back from the page,
+//   2. BPM and key are read back from the page,
 //   3. the file is saved again under its final name (name blocks incl. BPM + key, tags for
 //      MP3/FLAC) and the first copy is deleted,
 //   4. History (and the queue item, if any) get the result — that's what the popup shows.
@@ -9,9 +9,14 @@
 //
 // The first download keeps the file usable even if any step fails: nothing is deleted
 // unless the renamed copy has finished saving.
+//
+// A "standalone" job (File tab: a file was just added, nothing downloaded yet) only does
+// steps 1–2 and stores the result under `analysisFile:<fileUrl>`; when the file is converted
+// later, its name already has BPM and key and no second analysis is needed.
 
 const TUNEBAT_OK = ["mp3", "wav", "flac", "aac", "ogg", "m4a"]; // what Tunebat's uploader accepts
 const TUNEBAT_TAB_KEY = "tunebatTabId";
+const COMPACT_ABOVE_BYTES = 30 * 1024 * 1024; // bigger files are analyzed from a small mono copy
 
 let analysisRunning = false;
 let analysisLock = Promise.resolve();
@@ -98,10 +103,24 @@ async function runAnalysis() {
   }
 }
 
-// Result of a job goes to History and, for queue downloads, to the queue item.
+// Result of a job goes to History and, for queue downloads, to the queue item; a standalone
+// (File tab) job has neither — its state lives in its own storage key for the popup to read.
 async function setAnalysisState(job, patch) {
+  if (job.standalone) {
+    const key = FILE_ANALYSIS_PREFIX + job.fileUrl;
+    const current = (await chrome.storage.local.get(key))[key] || {};
+    await chrome.storage.local.set({ [key]: { ...current, ...patch, ts: Date.now() } });
+    return;
+  }
   await updateHistory(job.historyId, patch);
   if (job.queueId) await patchQueueItem(job.queueId, patch);
+}
+
+// Standalone results older than a day are of no use (the server copy is long gone).
+async function pruneFileAnalyses() {
+  const all = await chrome.storage.local.get(null);
+  const stale = Object.keys(all).filter((k) => k.startsWith(FILE_ANALYSIS_PREFIX) && Date.now() - (all[k]?.ts || 0) > 24 * 3600 * 1000);
+  if (stale.length) await chrome.storage.local.remove(stale);
 }
 
 async function processAnalysis(job) {
@@ -113,6 +132,11 @@ async function processAnalysis(job) {
       await setAnalysisState(job, { analysis: "failed", analysisError: "Tunebat didn't return a result." });
       return;
     }
+    if (job.standalone) {
+      await setAnalysisState(job, { analysis: "done", analysisError: "", bpm: result.bpm, key: result.key });
+      pruneFileAnalyses().catch(() => {});
+      return;
+    }
     await finalizeAnalysis(job, result, settings);
   } catch (err) {
     await setAnalysisState(job, { analysis: "failed", analysisError: err.message }).catch(() => {});
@@ -122,10 +146,13 @@ async function processAnalysis(job) {
 // --- Talking to Tunebat ---
 
 async function analyzeOnTunebat(job) {
-  // Tunebat's uploader doesn't take AIFF/OPUS: analyze a plain WAV copy of those instead.
+  // Tunebat's uploader doesn't take AIFF/OPUS, and a huge lossless file is slow to hand over
+  // (it's base64-encoded into the page): for those, analyze a small mono 22 kHz WAV copy
+  // made on the spot — plenty for BPM and key, and never saved anywhere.
   let sourceUrl = job.fileUrl;
   let ext = job.format;
-  if (!TUNEBAT_OK.includes(ext)) {
+  const size = Number((await fetch(sourceUrl, { method: "HEAD" }).catch(() => null))?.headers.get("content-length")) || 0;
+  if (!TUNEBAT_OK.includes(ext) || size > COMPACT_ABOVE_BYTES) {
     const res = await fetch(`${SERVER}/api/analysis-source`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -205,10 +232,18 @@ async function discardTunebatTab() {
   if (id !== null) await chrome.tabs.remove(id).catch(() => {});
 }
 
+// Closes the shared tab a few seconds after the last job — but not while downloads are still
+// running: more files are about to arrive, and reopening the page for each would waste the
+// point of sharing it.
 function scheduleTunebatTabClose() {
   clearTimeout(closeTabTimer);
   closeTabTimer = setTimeout(async () => {
     if (analysisRunning) return;
+    const queue = await loadQueue();
+    if (queue.some((i) => i.status === "queued" || i.status === "working")) {
+      scheduleTunebatTabClose();
+      return;
+    }
     if ((await getSettings()).closeTunebatTab) await discardTunebatTab();
   }, 4000);
 }
@@ -228,7 +263,7 @@ async function waitDownloadComplete(id, timeoutMs) {
 }
 
 async function finalizeAnalysis(job, result, settings) {
-  const done = { analysis: "done", analysisError: "", bpm: result.bpm, key: result.key, camelot: result.camelot };
+  const done = { analysis: "done", analysisError: "", bpm: result.bpm, key: result.key };
   const ext = job.format;
   const finalBase = buildName(settings, {
     title: job.title,
@@ -236,7 +271,6 @@ async function finalizeAnalysis(job, result, settings) {
     format: ext,
     bpm: result.bpm,
     key: result.key,
-    camelot: result.camelot,
   });
   const folder = cleanSubfolder(settings.subfolder);
   const finalName = `${folder ? folder + "/" : ""}${finalBase}.${ext}`;

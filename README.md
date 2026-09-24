@@ -125,11 +125,11 @@ npm start
 Tunebat analizează fișierele **local, în browser** (nu le trimite pe niciun server). După fiecare descărcare, extensia (service worker-ul din fundal) face asta pentru tine:
 
 1. deschide **Tunebat într-un tab în fundal** (tab-ul tău rămâne cel activ) și îi „dă" fișierul — exact ca o selecție manuală, cu `File`-ul creat în contextul paginii ca React-ul lor să nu-l respingă. Nu așteaptă încărcarea completă a paginii (reclame): verifică la 100 ms până când widget-ul de upload există și e gata
-2. citește rândul de rezultat (BPM, cheie, cod Camelot) — îl găsește după conținut, nu după clase CSS (sunt hash-uite și se schimbă)
+2. citește rândul de rezultat — **doar BPM și cheia** — îl găsește după conținut, nu după clase CSS (sunt hash-uite și se schimbă)
 3. salvează fișierul din nou sub **numele final**, cu BPM și cheie și în tag-uri (MP3/FLAC: `TBPM`/`TKEY`, `BPM`/`INITIALKEY`), apoi **șterge prima copie** — dar doar după ce copia nouă s-a terminat de salvat; dacă orice pas eșuează, prima copie rămâne neatinsă
-4. scrie rezultatul în History (și în coadă) — extensia îl arată sub butoanele de format: `140 BPM · A minor · 8A`
+4. scrie rezultatul în History (și în coadă) — extensia îl arată sub butoanele de format într-un **tabel cu două coloane** (BPM | Key), fără alt text; cât timp analiza rulează, celulele arată un spinner
 
-Mai multe fișiere la rând (o coadă, un playlist) folosesc **același tab Tunebat** — pagina se încarcă o singură dată — care se închide după câteva secunde de inactivitate. AIFF și Opus nu sunt acceptate de Tunebat: pentru ele se analizează o copie WAV făcută pe loc (nu se salvează nicăieri). Se poate opri, sau se poate lăsa tab-ul deschis / prima copie nesștearsă, din Settings → „BPM & key (Tunebat)". Cu „Ask where to save each file" pornit, analiza rulează dar fișierul nu se mai salvează a doua oară (nu vrem un al doilea dialog).
+Mai multe fișiere la rând (o coadă, un playlist) folosesc **același tab Tunebat** — pagina se încarcă o singură dată — care se închide după câteva secunde de inactivitate. AIFF și Opus nu sunt acceptate de Tunebat, iar un fișier lossless foarte mare (peste 30 MB) e lent de predat paginii: pentru ele se analizează o copie WAV mono 22 kHz făcută pe loc (~4× mai mică, cu tot ce trebuie pentru BPM și cheie; nu se salvează nicăieri). Se poate opri, sau se poate lăsa tab-ul deschis / prima copie nesștearsă, din Settings → „BPM & key (Tunebat)". Cu „Ask where to save each file" pornit, analiza rulează dar fișierul nu se mai salvează a doua oară (nu vrem un al doilea dialog).
 
 ## Viteza descărcării
 
@@ -226,15 +226,16 @@ Toate cele trei tab-uri au aceeași grilă de butoane, un click = un fișier:
 
 Doar butonul apăsat afișează spinner cât se convertește; restul se estompează. **WAV, FLAC și AIFF păstrează 24-bit** dacă sursa e 24-bit (ex. un WAV 24-bit primit de la client); sursele lossy (YouTube, MP3, AAC, Opus) ies pe 16-bit, fiindcă 24-bit acolo n-ar aduce nimic. Frecvența de eșantionare se păstrează (MP3 și Opus se aduc automat la o frecvență suportată, ex. 96 kHz → 48 kHz). Pregătirea în fundal (vezi „Viteza descărcării") face din start MP3 și WAV; celelalte formate se convertesc la click din sursa deja descărcată, de obicei în 1-3 s.
 
-## Tab-ul File (conversie)
+## Tab-ul File (analiză + conversie)
 
 Pentru un fișier pe care îl ai deja pe disc (trimis de client pe WhatsApp/mail/Drive):
 
 1. Deschide extensia → tab-ul **File**
 2. Trage fișierul în zonă (drag & drop) **sau** click în zonă și alege-l din file explorer — MP3, WAV, FLAC, AIFF, M4A, AAC, OGG sau OPUS, maxim 100 MB
-3. Click pe un format → fișierul se descarcă cu numele bazat pe blocurile din Settings (implicit numele original + BPM și cheie după analiză). Fișierul se urcă pe serverul local o singură dată, deci mai multe formate la rând nu îl retrimit
+3. **Imediat ce fișierul e pus, pleacă singur la Tunebat** (în fundal) și în câteva secunde apare tabelul `BPM | Key` sub butoane
+4. Click pe un format → fișierul se descarcă convertit, cu numele din blocurile din Settings — iar BPM-ul și cheia sunt **deja în nume** (nu mai e o a doua analiză, nici o a doua salvare). Dacă analiza încă mai rulează, conversia o așteaptă până la 15 secunde
 
-Copia de pe server (`/api/stash`, `/api/convert-stash`) se șterge automat după 1 oră. Conversiile din File **nu** normalizează volumul implicit; comutatorul „File conversions" din Settings îl activează.
+Fișierul se urcă pe serverul local (`/api/stash`) o singură dată, când e adăugat, și e refolosit pentru analiză și pentru toate conversiile; copia se șterge automat după 1 oră. Conversiile din File **nu** normalizează volumul implicit; comutatorul „File conversions" din Settings îl activează. Analiza la adăugare se oprește din Settings („Files, when added").
 
 ## Tab-ul Link: un link, mai multe sau un playlist
 
@@ -247,7 +248,7 @@ Coada apare sub butoane și rulează **în fundal** (service worker-ul extensiei
 
 ## Tab-ul History
 
-Ultimele 30 de descărcări (Link, Sample, File), fiecare cu rezultatul analizei (`90 BPM · F# minor · 11A`), **Show in folder**, **Analyze again** (dacă analiza a eșuat și copia de pe server încă există) și — pentru Link — **Download again in another format**. „Clear history" îl golește; „Clear cached data" din Settings îl păstrează.
+Ultimele 30 de descărcări (Link, Sample, File), fiecare cu rezultatul analizei (tabelul `BPM | Key`), **Show in folder**, **Analyze again** (dacă analiza a eșuat și copia de pe server încă există) și — pentru Link — **Download again in another format**. „Clear history" îl golește; „Clear cached data" din Settings îl păstrează.
 
 ## Tab-ul Sample: Trim silence și fade
 
@@ -257,7 +258,7 @@ Sub waveform: **Trim silence** mută mânerele pe primul și ultimul sunet (prag
 
 ## Nume de fișier: blocuri
 
-Settings → **File names**: numele fișierelor se compun din **blocuri** pe care le tragi (drag & drop) în ordinea dorită: **Beat name** (titlul), **BPM**, **Key**, **Producer** (canalul/uploader-ul) — ordinea implicită — plus **Camelot**, **Date**, **Format** și **Custom text**. Tragi un bloc în „Available" (sau apeși ×) ca să-l scoți, apeși „+" ca să-l adaugi; alegi separatorul (` - `, `_`, spațiu, ` | `) și vezi imediat o previzualizare (`Midnight Drive - 140bpm - Am - Beatmaker.mp3`). Blocurile fără valoare se sar (BPM și cheia lipsesc până vine analiza; o înregistrare nu are producer), iar un producer care apare deja în titlu („Producer - Beat") nu se repetă.
+Settings → **File names**: numele fișierelor se compun din **blocuri** pe care le tragi (drag & drop) în ordinea dorită: **Beat name** (titlul), **BPM**, **Key**, **Producer** (canalul/uploader-ul) — ordinea implicită — plus **Date**, **Format** și **Custom text**. Tragi un bloc în „Available" (sau apeși ×) ca să-l scoți, apeși „+" ca să-l adaugi; alegi separatorul (` - `, `_`, spațiu, ` | `), cum se scrie BPM-ul (**`140bpm`**, `140 BPM` sau `140`) și cheia (**`Am`** / `A minor`) și vezi imediat o previzualizare (`Midnight Drive - 140bpm - Am - Beatmaker.mp3`). Blocurile fără valoare se sar (BPM și cheia lipsesc până vine analiza; o înregistrare nu are producer), iar un producer care apare deja în titlu („Producer - Beat") nu se repetă.
 
 **Tags & cover art** (implicit ON): descărcările Link primesc titlu, artist (uploader) și linkul sursă, plus imaginea videoclipului (tăiată pătrat, 600 px) drept copertă — în MP3, M4A, FLAC și AIFF; WAV primește doar tag-uri text, Opus doar tag-uri.
 
@@ -275,7 +276,7 @@ Rotița din colțul dreapta sus. Setările se salvează automat și se păstreaz
 
 **Volume normalization** — un comutator separat pentru *Link downloads* și *Sample recordings* (implicit pornite) și *File conversions* (implicit oprit). **Target loudness**: -14, -16 (implicit) sau -18 LUFS.
 
-**File names** — blocurile de mai sus. **BPM & key (Tunebat)** — *Analyze after each download*, *Delete the first copy*, *Close the Tunebat tab when done* (toate implicit ON).
+**File names** — blocurile de mai sus. **BPM & key (Tunebat)** — analiza pe rând pentru *Link downloads*, *Sample recordings* și *Files, when added* (toate implicit ON), plus *Delete the first copy* și *Close the Tunebat tab when done* (implicit ON).
 
 **Tabs** — tragi ca să reordonezi File / Link / Sample / History și comuți ca să ascunzi (măcar unul rămâne vizibil; Settings e mereu acolo). Un tab ascuns nu costă nimic — de pildă, cu Link ascuns extensia nu mai pornește analiza și pregătirea în fundal la fiecare deschidere.
 

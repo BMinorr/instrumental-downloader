@@ -2,14 +2,13 @@
 // keeps going with the popup closed. State lives in chrome.storage.local["queue"]; the popup
 // only renders it (storage.onChanged) and sends commands (queue:add / remove / retry / clear).
 //
-// Two items run at a time: yt-dlp's extraction (~3 s of mostly waiting on the network) is the
+// Two items run at a time by default (Settings: 1–3): yt-dlp's extraction (~3 s of mostly waiting on the network) is the
 // slow part, so overlapping two roughly halves a batch without loading the CPU much. If the
 // worker is killed mid-download, the next start puts the interrupted items back in line
 // (resumeQueue) and carries on. Each saved item is then handed to the analysis engine.
 
 const QUEUE_MAX = 300;
 
-const QUEUE_CONCURRENCY = 2;
 let queueWorkers = 0;
 let queueProcessed = 0;
 let queueFailed = 0;
@@ -98,9 +97,10 @@ async function resumeQueue() {
   runQueue();
 }
 
-function runQueue() {
-  // Top up to QUEUE_CONCURRENCY lanes; each lane takes items until none are left.
-  while (queueWorkers < QUEUE_CONCURRENCY) {
+async function runQueue() {
+  // Top up to the "downloads at once" setting (default 2); each lane takes items until none are left.
+  const lanes = (await getSettings()).queueConcurrency;
+  while (queueWorkers < lanes) {
     if (queueWorkers === 0) {
       queueProcessed = 0;
       queueFailed = 0;
@@ -183,7 +183,7 @@ async function processQueueItem(item) {
       if (!saved) return;
       Object.assign(saved, { status: "done", title: title || item.title, step: "", downloadId });
       // (the analysis may already be further along than "pending" by the time we get here)
-      if (settings.analyze && !saved.analysis) saved.analysis = "pending";
+      if (settings.analyze.link && !saved.analysis) saved.analysis = "pending";
     });
     return true;
   } catch (err) {

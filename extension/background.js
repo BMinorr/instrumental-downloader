@@ -184,13 +184,3 @@ async function getLastSampleRecording() {
 
 
 
-// --- Reading Tunebat's answer (BPM + key) ---
-// Tunebat analyzes in the page; we read the result row back so the popup can offer to name
-// the file with it. Its CSS class names are hashed and change between deploys, so the row is
-// found by content: the element showing the file name, and the nearest ancestor that also
-// shows a key ("A minor") — then key / Camelot code / BPM are picked out by their shape.
-
-
-
-
-

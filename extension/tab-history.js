@@ -38,9 +38,30 @@ function iconButton(html, title, onClick) {
   return button;
 }
 
-// "140 BPM · A minor · 8A" (whatever is known).
-function analysisSummary(entry) {
-  return [entry.bpm ? `${Math.round(entry.bpm)} BPM` : "", entry.key, entry.camelot].filter(Boolean).join(" · ");
+// The two-column table that shows what Tunebat found: BPM | Key. `state`: "pending" (spinner
+// cells while it's being analyzed), "done" (the values) or "failed" (dashes). No other text.
+function buildAnalysisTable(state, values = {}, { compact = false } = {}) {
+  const table = document.createElement("table");
+  table.className = `analysis-table${compact ? " compact" : ""}${state === "failed" ? " failed" : ""}`;
+  const cell = (tag, content) => {
+    const el = document.createElement(tag);
+    if (content instanceof Node) el.appendChild(content);
+    else el.textContent = content;
+    return el;
+  };
+  const spinner = () => Object.assign(document.createElement("span"), { className: "spinner small" });
+  const head = table.createTHead().insertRow();
+  head.append(cell("th", "BPM"), cell("th", "Key"));
+  const row = table.createTBody().insertRow();
+  if (state === "pending") row.append(cell("td", spinner()), cell("td", spinner()));
+  else if (state === "failed") row.append(cell("td", "—"), cell("td", "—"));
+  else row.append(cell("td", values.bpm ? String(Math.round(values.bpm)) : "—"), cell("td", values.key || "—"));
+  return table;
+}
+
+// "pending" | "done" | "failed" from an entry's `analysis` field (pending/analyzing both spin).
+function analysisState(entry) {
+  return entry.analysis === "done" ? "done" : entry.analysis === "failed" ? "failed" : "pending";
 }
 
 function buildHistoryRow(entry) {
@@ -58,20 +79,7 @@ function buildHistoryRow(entry) {
   meta.textContent = `${entry.format.toUpperCase()} · ${SOURCE_LABELS[entry.source] || ""} · ${relativeTime(entry.ts)}`;
   info.append(title, meta);
 
-  // What the automatic analysis says about this file.
-  const analysis = document.createElement("p");
-  analysis.className = "meta history-analysis-line";
-  const summary = analysisSummary(entry);
-  if (entry.analysis === "done" && summary) {
-    analysis.textContent = summary;
-    analysis.classList.add("done");
-  } else if (entry.analysis === "pending" || entry.analysis === "analyzing") {
-    analysis.textContent = "Analyzing on Tunebat…";
-  } else if (entry.analysis === "failed") {
-    analysis.textContent = "BPM & key unavailable";
-    analysis.classList.add("failed");
-  }
-  if (analysis.textContent) info.appendChild(analysis);
+  if (entry.analysis) info.appendChild(buildAnalysisTable(analysisState(entry), entry, { compact: true }));
 
   const status = document.createElement("p");
   status.className = "meta history-status hidden";
@@ -173,7 +181,7 @@ function createResultCard(el, pick) {
   const card = {
     async refresh() {
       const entry = pick(await loadHistory());
-      renderResultCard(el, entry);
+      renderResultCard(el, entry, entry && (() => chrome.runtime.sendMessage({ type: "analysis:retry", historyId: entry.id })));
     },
   };
   resultCards.add(card);
@@ -181,35 +189,14 @@ function createResultCard(el, pick) {
   return card;
 }
 
-function renderResultCard(el, entry) {
+function renderResultCard(el, entry, onRetry) {
   el.replaceChildren();
   el.classList.toggle("hidden", !entry || !entry.analysis);
   if (!entry || !entry.analysis) return;
-
-  const line = document.createElement("p");
-  line.className = "result-line";
-  const sub = document.createElement("p");
-  sub.className = "meta";
-
-  if (entry.analysis === "pending" || entry.analysis === "analyzing") {
-    const spinner = document.createElement("span");
-    spinner.className = "spinner small";
-    line.append(spinner, " Analyzing BPM & key on Tunebat…");
-    sub.textContent = "Saved. The file gets renamed when the analysis is done.";
-  } else if (entry.analysis === "done") {
-    line.textContent = analysisSummary(entry) || "Analysis done";
-    line.classList.add("done");
-    sub.textContent = `Saved as “${entry.filename.split("/").pop()}”`;
-  } else {
-    line.textContent = "Couldn't get BPM & key from Tunebat";
-    line.classList.add("failed");
-    sub.textContent = "The file was kept as first saved.";
-    const retry = document.createElement("button");
-    retry.className = "analysis-btn";
-    retry.textContent = "Try again";
-    retry.addEventListener("click", () => chrome.runtime.sendMessage({ type: "analysis:retry", historyId: entry.id }));
-    el.append(line, sub, retry);
-    return;
+  el.appendChild(buildAnalysisTable(analysisState(entry), entry));
+  if (entry.analysis === "failed" && onRetry) {
+    const retry = iconButton(ICON_RETRY, "Try again", onRetry);
+    retry.classList.add("result-retry");
+    el.appendChild(retry);
   }
-  el.append(line, sub);
 }

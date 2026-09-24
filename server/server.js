@@ -262,8 +262,10 @@ app.post("/api/analysis-source", async (req, res) => {
     const name = path.basename(String((req.body || {}).file || ""));
     const source = path.join(DOWNLOADS_DIR, name);
     if (!name || !fs.existsSync(source)) throw new Error("Fișierul a expirat de pe server.");
-    const id = `an-${name.replace(/\.[^.]+$/, "").replace(/[^\w-]/g, "_")}`;
-    const filePath = await convertToFormat(source, "wav", DOWNLOADS_DIR, id, { loudnorm: false, tags: false });
+    const id = `anc-${name.replace(/\.[^.]+$/, "").replace(/[^\w-]/g, "_")}`;
+    // Mono, 22.05 kHz, 16-bit: a fraction of the size of the original (a 5-minute 24-bit/48 kHz
+    // stereo WAV is ~60 MB, this is ~13 MB) with everything BPM and key detection needs.
+    const filePath = await convertToFormat(source, "wav", DOWNLOADS_DIR, id, { loudnorm: false, tags: false, compact: true });
     res.json({ downloadUrl: `/files/${encodeURIComponent(path.basename(filePath))}` });
   } catch (err) {
     res.status(400).json({ error: err.message });

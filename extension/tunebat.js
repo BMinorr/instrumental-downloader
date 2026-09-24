@@ -78,9 +78,8 @@ function readTunebatResult(filename) {
 
   const texts = textsOf(row);
   const key = texts.find((t) => KEY.test(t));
-  const camelot = texts.find((t) => /^\d{1,2}[AB]$/.test(t));
   const bpm = texts.find((t) => /^\d{2,3}(\.\d+)?$/.test(t));
-  return key && bpm ? { key, camelot: camelot || "", bpm: Number(bpm) } : null;
+  return key && bpm ? { key, bpm: Number(bpm) } : null;
 }
 
 const AUDIO_MIME_TYPES = {

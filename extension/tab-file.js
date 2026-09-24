@@ -1,17 +1,21 @@
-// --- File tab: pick/drop a local audio file, then convert it ---
-// The file is copied to the local server once (POST /api/stash) the first time it's needed
-// and reused for every conversion after that.
+// --- File tab: pick/drop a local audio file; it is analyzed on Tunebat right away, then converted ---
+// The file is copied to the local server once (POST /api/stash) when it's added and reused for
+// the analysis and for every conversion after that. The BPM/key found by the automatic
+// analysis (background worker) are shown in a table and go straight into the converted
+// file's name — no second analysis.
 
 const FILE_EXTS = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "aiff", "aif", "opus"]; // /api/stash whitelist
 const FILE_MAX_BYTES = 100 * 1024 * 1024; // matches the server's /api/stash limit
 let selectedFile = null;
-// The Tunebat analysis of the file that was just converted (History has the full record).
-const fileResultCard = createResultCard(els.fileResultCard, (history) => {
-  if (!selectedFile) return null;
-  const title = fileBaseName(selectedFile.name);
-  return history.find((e) => e.source === "file" && e.title === title && Date.now() - e.ts < 15 * 60 * 1000) || null;
-});
-let stash = null; // server copy of selectedFile: { name, url } — null until first upload
+// What Tunebat found for the file that's in the drop zone (a two-column BPM | Key table).
+const fileResultCard = {
+  async refresh() {
+    const record = await fileAnalysisRecord();
+    renderResultCard(els.fileResultCard, record, record && (() => startFileAnalysis()));
+  },
+};
+let stash = null; // server copy of selectedFile: { name, url } — null until uploaded
+let stashPromise = null; // the upload in flight (or done) for selectedFile
 
 function fileExtension(name) {
   const dot = name.lastIndexOf(".");
@@ -40,6 +44,10 @@ function describeError(err) {
 }
 
 function initFileTab() {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    const key = fileAnalysisKey();
+    if (area === "local" && key && changes[key]) fileResultCard.refresh();
+  });
   const openPicker = () => els.fileInput.click();
   els.fileDropzone.addEventListener("click", openPicker);
   els.fileDropzone.addEventListener("keydown", (e) => {
@@ -78,6 +86,7 @@ function initFileTab() {
 function selectFile(file) {
   setFileMessage("");
   stash = null;
+  stashPromise = null;
 
   if (file) {
     if (!FILE_EXTS.includes(fileExtension(file.name))) {
@@ -95,6 +104,7 @@ function selectFile(file) {
   // Nothing to convert until a file is chosen.
   els.fileFormatOptions.classList.toggle("hidden", !file);
   fileResultCard.refresh();
+  if (file) startFileAnalysis(); // no button: adding the file is what sends it to Tunebat
   els.fileDropzoneTitle.textContent = file ? file.name : "Drop an audio file here";
   els.fileDropzoneSub.textContent = file
     ? `${formatBytes(file.size)} · click to choose another`
@@ -102,20 +112,75 @@ function selectFile(file) {
   els.fileDropzoneFormats.classList.toggle("hidden", !!file);
 }
 
-// Uploads the selected file to the local server (once per selection).
-async function ensureStash() {
-  if (stash) return stash;
+// Uploads the selected file to the local server (once per selection, even if asked twice).
+function ensureStash() {
+  if (stash) return Promise.resolve(stash);
+  if (stashPromise) return stashPromise;
   const file = selectedFile;
-  const res = await fetch(`${SERVER}/api/stash?ext=${fileExtension(file.name)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/octet-stream" },
-    body: file,
+  const promise = (async () => {
+    const res = await fetch(`${SERVER}/api/stash?ext=${fileExtension(file.name)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Unknown error.");
+    if (file !== selectedFile) throw new Error("The selected file changed — try again.");
+    stash = { name: data.filename, url: `${SERVER}${data.downloadUrl}` };
+    return stash;
+  })();
+  stashPromise = promise;
+  promise.catch(() => {
+    if (stashPromise === promise) stashPromise = null; // let a later attempt retry
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Unknown error.");
-  if (file !== selectedFile) throw new Error("The selected file changed — try again.");
-  stash = { name: data.filename, url: `${SERVER}${data.downloadUrl}` };
-  return stash;
+  return promise;
+}
+
+// --- Automatic analysis of the added file ---
+
+function fileAnalysisKey() {
+  return stash ? FILE_ANALYSIS_PREFIX + stash.url : null;
+}
+
+async function fileAnalysisRecord() {
+  const key = fileAnalysisKey();
+  return key ? (await chrome.storage.local.get(key))[key] || null : null;
+}
+
+// Uploads the file (if it isn't yet) and hands it to the background worker for analysis.
+async function startFileAnalysis() {
+  const file = selectedFile;
+  if (!file || !(await getSettings()).analyze.file) return;
+  try {
+    setFileMessage("Uploading…");
+    await ensureStash();
+    if (file !== selectedFile) return;
+    setFileMessage("");
+    await chrome.storage.local.set({ [fileAnalysisKey()]: { analysis: "pending", ts: Date.now() } });
+    await requestAnalysis({
+      id: newId(),
+      standalone: true,
+      fileUrl: stash.url,
+      format: fileExtension(file.name),
+      title: fileBaseName(file.name),
+      source: "file",
+    });
+  } catch (err) {
+    if (file === selectedFile) setFileMessage(describeError(err));
+  }
+}
+
+// The analysis of the current file, waiting a few seconds if it's still running — so a
+// conversion started right after adding the file gets BPM and key in its name at once.
+async function knownFileAnalysis() {
+  let record = await fileAnalysisRecord();
+  const deadline = Date.now() + 15000;
+  while (record && (record.analysis === "pending" || record.analysis === "analyzing") && Date.now() < deadline) {
+    setFileMessage("Waiting for BPM & key…");
+    await new Promise((r) => setTimeout(r, 300));
+    record = await fileAnalysisRecord();
+  }
+  return record?.analysis === "done" ? record : null;
 }
 
 async function convertStash(format, normalize) {
@@ -137,23 +202,24 @@ async function handleFileConvert(format) {
     if (!stash) setFileMessage("Uploading…");
     await ensureStash();
     setFileMessage("Converting…");
+    const knownPromise = knownFileAnalysis(); // runs alongside the conversion
     const converted = await convertStash(format, await getNormalizeOptions("file"));
 
     const settings = await getSettings();
     const title = fileBaseName(file.name);
-    const downloadId = await startDownload(converted.url, `${buildName(settings, { title, format })}.${format}`, {
-      source: "file",
-      title,
-      format,
-    });
+    const known = await knownPromise; // {bpm, key} or null
+    const downloadId = await startDownload(
+      converted.url,
+      `${buildName(settings, { title, format, bpm: known?.bpm, key: known?.key })}.${format}`,
+      { source: "file", title, format, bpm: known?.bpm, key: known?.key }
+    );
     setFileMessage(
       downloadId === null
         ? "Save cancelled."
-        : settings.analyze
+        : !known && settings.analyze.file
           ? "Saved — analyzing BPM & key on Tunebat in the background."
           : "Download started — check Chrome's downloads bar."
     );
-    fileResultCard.refresh();
   } catch (err) {
     setFileMessage(describeError(err));
   } finally {

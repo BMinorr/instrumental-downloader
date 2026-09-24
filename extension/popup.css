@@ -190,10 +190,6 @@ header {
   margin-top: 10px;
 }
 
-#btn-file-tunebat {
-  margin-top: 10px;
-}
-
 .settings-section {
   padding-bottom: 14px;
   margin-bottom: 14px;
@@ -914,54 +910,9 @@ kbd {
   margin-top: 12px;
 }
 
-#queue-input {
-  display: block;
-  width: 100%;
-  min-height: 62px;
-  resize: vertical;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-#queue-controls {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-#queue-controls .settings-input {
-  width: 118px;
-  flex-shrink: 0;
-}
-
-#queue-controls .secondary-btn {
-  margin-top: 0;
-  flex: 1;
-}
-
-.secondary-btn.strong {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.secondary-btn.strong:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
 .secondary-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-#queue-message {
-  margin-top: 8px;
-  line-height: 1.4;
-}
-
-#queue-empty {
-  margin-top: 12px;
 }
 
 .queue-summary {
@@ -1067,40 +1018,6 @@ kbd {
   border: 1px solid rgba(108, 92, 231, 0.4);
 }
 
-.analysis-text {
-  font-size: 13px;
-  font-weight: 600;
-  min-width: 0;
-  text-align: center;
-}
-
-.analysis-btn {
-  appearance: none;
-  padding: 7px 9px;
-  border: none;
-  border-radius: 6px;
-  background: var(--accent);
-  color: #fff;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.analysis-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
-.analysis-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.history-analysis {
-  grid-column: 1 / -1;
-  margin-top: 2px;
-}
-
 /* ---- Link tab: paste box, batch card ---- */
 #paste-row {
   align-items: flex-start;
@@ -1131,48 +1048,78 @@ kbd {
   margin-bottom: 10px;
 }
 
-/* ---- result card under the format buttons (Tunebat analysis) ---- */
+/* ---- what Tunebat found: a two-column table (BPM | Key), under the format buttons and in rows ---- */
 .result-card {
+  position: relative;
   margin-top: 10px;
-  padding: 9px 11px;
-  border-radius: 8px;
-  background: rgba(108, 92, 231, 0.13);
-  border: 1px solid rgba(108, 92, 231, 0.4);
 }
 
-.result-line {
-  margin: 0 0 2px;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.result-line.done {
-  color: var(--text);
-}
-
-.result-line.failed {
-  color: var(--err);
-}
-
-.result-card .analysis-btn {
-  margin-top: 8px;
+.analysis-table {
   width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  border: 1px solid rgba(108, 92, 231, 0.45);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(108, 92, 231, 0.12);
+  text-align: center;
 }
 
-.history-analysis-line {
-  margin-top: 2px;
-  font-weight: 600;
+.analysis-table th {
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(108, 92, 231, 0.1);
+  border-bottom: 1px solid rgba(108, 92, 231, 0.3);
 }
 
-.history-analysis-line.done {
-  color: var(--accent-hover);
+.analysis-table td {
+  padding: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  height: 36px;
 }
 
-.history-analysis-line.failed {
-  color: var(--err);
+.analysis-table th + th,
+.analysis-table td + td {
+  border-left: 1px solid rgba(108, 92, 231, 0.3);
+}
+
+.analysis-table td .spinner {
+  margin: 0 auto;
+}
+
+.analysis-table.failed td {
+  color: var(--muted);
+}
+
+.analysis-table.compact {
+  margin-top: 6px;
+}
+
+.analysis-table.compact th {
+  padding: 3px 6px;
+  font-size: 9px;
+}
+
+.analysis-table.compact td {
+  padding: 4px 6px;
+  height: 26px;
+  font-size: 12px;
+}
+
+.result-retry {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--bg);
 }
 
 /* ---- Settings: draggable blocks + tab list ---- */
@@ -1282,4 +1229,13 @@ kbd {
 
 .tab-item-label {
   flex: 1;
+}
+
+.secondary-btn.danger:hover:not(:disabled) {
+  border-color: var(--err);
+  color: var(--err);
+}
+
+#settings-btn-reset {
+  margin-top: 6px;
 }

@@ -131,7 +131,7 @@ function buildStartTabSelect(settings) {
 
 // --- File names: draggable blocks ---
 
-let nameSettings = null; // { blocks, separator, custom } as currently edited
+let nameSettings = null; // { blocks, separator, custom, bpmStyle, keyStyle } as currently edited
 
 function renderNameBlocks() {
   const used = nameSettings.blocks;
@@ -162,8 +162,8 @@ function renderNameBlocks() {
 
   els.nameCustomRow.classList.toggle("hidden", !used.includes("custom"));
   els.namePreview.textContent = buildName(
-    { nameBlocks: used, nameSeparator: nameSettings.separator, nameCustom: nameSettings.custom },
-    { title: "Midnight Drive", producer: "Beatmaker", bpm: 140, key: "A minor", camelot: "8A", format: "mp3" }
+    { nameBlocks: used, nameSeparator: nameSettings.separator, nameCustom: nameSettings.custom, bpmStyle: nameSettings.bpmStyle, keyStyle: nameSettings.keyStyle },
+    { title: "Midnight Drive", producer: "Beatmaker", bpm: 140, key: "A minor", format: "mp3" }
   ) + ".mp3";
 }
 
@@ -182,9 +182,29 @@ const nameSortable = makeSortable([els.nameUsed, els.nameAvailable], () => {
 });
 
 function initNameBuilder(settings) {
-  nameSettings = { blocks: settings.nameBlocks, separator: settings.nameSeparator, custom: settings.nameCustom };
+  nameSettings = {
+    blocks: settings.nameBlocks,
+    separator: settings.nameSeparator,
+    custom: settings.nameCustom,
+    bpmStyle: settings.bpmStyle,
+    keyStyle: settings.keyStyle,
+  };
   for (const sep of NAME_SEPARATORS) els.settingNameSeparator.add(new Option(sep.label, sep.value));
+  for (const style of BPM_STYLES) els.settingBpmStyle.add(new Option(style.label, style.value));
+  for (const style of KEY_STYLES) els.settingKeyStyle.add(new Option(style.label, style.value));
   els.settingNameSeparator.value = nameSettings.separator;
+  els.settingBpmStyle.value = nameSettings.bpmStyle;
+  els.settingKeyStyle.value = nameSettings.keyStyle;
+  for (const [el, prop, key] of [
+    [els.settingBpmStyle, "bpmStyle", SETTING_KEYS.bpmStyle],
+    [els.settingKeyStyle, "keyStyle", SETTING_KEYS.keyStyle],
+  ]) {
+    el.addEventListener("change", () => {
+      nameSettings[prop] = el.value;
+      chrome.storage.local.set({ [key]: el.value });
+      renderNameBlocks();
+    });
+  }
   els.settingNameCustom.value = nameSettings.custom;
   els.settingNameSeparator.addEventListener("change", () => {
     nameSettings.separator = els.settingNameSeparator.value;
@@ -209,8 +229,11 @@ async function initSettingsTab() {
   els.settingSaveAs.checked = settings.saveAs;
   els.settingSubfolder.value = settings.subfolder;
   els.settingPrefetch.checked = settings.prefetch;
+  els.settingQueueConcurrency.value = String(settings.queueConcurrency);
   els.settingTags.checked = settings.tags;
-  els.settingAnalyze.checked = settings.analyze;
+  els.settingAnalyzeLink.checked = settings.analyze.link;
+  els.settingAnalyzeSample.checked = settings.analyze.sample;
+  els.settingAnalyzeFile.checked = settings.analyze.file;
   els.settingDeleteOriginal.checked = settings.deleteOriginal;
   els.settingCloseTunebat.checked = settings.closeTunebatTab;
   buildFormatChips(settings.formats);
@@ -228,8 +251,11 @@ async function initSettingsTab() {
     [els.settingSubfolder, SETTING_KEYS.subfolder, "input", () => els.settingSubfolder.value.trim()],
     [els.settingStartTab, SETTING_KEYS.startTab, "change", () => els.settingStartTab.value],
     [els.settingPrefetch, SETTING_KEYS.prefetch, "change", checkbox(els.settingPrefetch)],
+    [els.settingQueueConcurrency, SETTING_KEYS.queueConcurrency, "change", () => Number(els.settingQueueConcurrency.value)],
     [els.settingTags, SETTING_KEYS.tags, "change", checkbox(els.settingTags)],
-    [els.settingAnalyze, SETTING_KEYS.analyze, "change", checkbox(els.settingAnalyze)],
+    [els.settingAnalyzeLink, SETTING_KEYS.analyzeLink, "change", checkbox(els.settingAnalyzeLink)],
+    [els.settingAnalyzeSample, SETTING_KEYS.analyzeSample, "change", checkbox(els.settingAnalyzeSample)],
+    [els.settingAnalyzeFile, SETTING_KEYS.analyzeFile, "change", checkbox(els.settingAnalyzeFile)],
     [els.settingDeleteOriginal, SETTING_KEYS.deleteOriginal, "change", checkbox(els.settingDeleteOriginal)],
     [els.settingCloseTunebat, SETTING_KEYS.closeTunebatTab, "change", checkbox(els.settingCloseTunebat)],
   ];
@@ -246,6 +272,26 @@ async function initSettingsTab() {
   });
   els.btnYtdlpUpdate.addEventListener("click", updateYtdlp);
   els.settingsBtnClearCache.addEventListener("click", handleClearCache);
+  els.settingsBtnReset.addEventListener("click", handleResetSettings);
+}
+
+// Two clicks (the second within 4 s) wipe every saved setting — history, queue and files stay.
+let resetArmedTimer = null;
+async function handleResetSettings() {
+  const button = els.settingsBtnReset;
+  if (!resetArmedTimer) {
+    button.textContent = "Click again to confirm";
+    resetArmedTimer = setTimeout(() => {
+      resetArmedTimer = null;
+      button.textContent = "Reset settings to defaults";
+    }, 4000);
+    return;
+  }
+  clearTimeout(resetArmedTimer);
+  resetArmedTimer = null;
+  const all = await chrome.storage.local.get(null);
+  await chrome.storage.local.remove(Object.keys(all).filter((k) => k.startsWith("settings.")));
+  location.reload(); // rebuild every control from the defaults
 }
 
 // Forgets what the popup remembers about pages and its last tab. Settings, History, the
@@ -253,7 +299,7 @@ async function initSettingsTab() {
 async function handleClearCache() {
   const all = await chrome.storage.local.get(null);
   const keysToRemove = Object.keys(all).filter(
-    (k) => k === "activeTab" || k.startsWith("bundle:") || k.startsWith("pendingDownload:") || k.startsWith("analysis:")
+    (k) => k === "activeTab" || k.startsWith("bundle:") || k.startsWith("pendingDownload:") || k.startsWith("analysis:") || k.startsWith(FILE_ANALYSIS_PREFIX)
   );
   if (keysToRemove.length) await chrome.storage.local.remove(keysToRemove);
 

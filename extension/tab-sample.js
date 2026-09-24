@@ -424,7 +424,7 @@ async function handleSampleDownload(format) {
     els.sampleProgress.textContent =
       downloadId === null
         ? "Save cancelled."
-        : settings.analyze
+        : settings.analyze.sample
           ? "Saved — analyzing BPM & key on Tunebat in the background."
           : "Download started — check Chrome's downloads bar.";
     sampleResultCard.refresh();

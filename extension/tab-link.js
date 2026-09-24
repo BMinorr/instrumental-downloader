@@ -263,16 +263,14 @@ async function renderQueue() {
     title.title = item.url;
     const meta = document.createElement("p");
     meta.className = "meta queue-meta";
-    const analysis = analysisSummary(item);
     const detail =
       item.status === "error" ? item.error
       : item.status === "working" ? item.step
       : item.status === "queued" ? "Waiting"
-      : item.analysis === "done" && analysis ? analysis
-      : item.analysis === "pending" || item.analysis === "analyzing" ? "Saved · analyzing BPM & key…"
       : "Saved";
     meta.textContent = `${item.format.toUpperCase()} · ${detail}`;
     info.append(title, meta);
+    if (item.status === "done" && item.analysis) info.appendChild(buildAnalysisTable(analysisState(item), item, { compact: true }));
 
     row.append(icon, info);
     if (item.status === "error") {
@@ -448,7 +446,7 @@ async function handleDownload(format) {
     els.progress.textContent =
       downloadId === null
         ? "Save cancelled."
-        : settings.analyze
+        : settings.analyze.link
           ? "Saved — analyzing BPM & key on Tunebat in the background."
           : "Download started — check Chrome's downloads bar.";
     linkResultCard.refresh();
