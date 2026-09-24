@@ -1112,6 +1112,82 @@ kbd {
   font-size: 12px;
 }
 
+/* Reverb sizes for the BPM: sits under the BPM/Key table; every cell copies on click. */
+.reverb-table {
+  margin-top: 8px;
+}
+
+.reverb-table th:first-child {
+  width: 38%;
+}
+
+.reverb-table th {
+  padding: 5px 3px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.reverb-table td:not(:first-child) {
+  white-space: nowrap;
+}
+
+.reverb-table td {
+  height: 32px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reverb-table td + td,
+.reverb-table th + th {
+  border-left: 1px solid rgba(108, 92, 231, 0.3);
+}
+
+.reverb-table tbody tr + tr td {
+  border-top: 1px solid rgba(108, 92, 231, 0.2);
+}
+
+.reverb-table.compact {
+  margin-top: 6px;
+}
+
+.reverb-table.compact th {
+  padding: 3px 2px;
+  font-size: 8.5px;
+}
+
+.reverb-table.compact td {
+  height: 24px;
+  padding: 3px 3px;
+  font-size: 10.5px;
+  line-height: 1.15;
+}
+
+.reverb-table td.copyable {
+  position: relative;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.reverb-table td.copyable:hover {
+  background: rgba(108, 92, 231, 0.22);
+}
+
+.reverb-table td.copied {
+  color: transparent;
+  background: color-mix(in srgb, var(--ok) 25%, transparent);
+}
+
+.reverb-table td.copied::after {
+  content: "Copied";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
 .result-retry {
   position: absolute;
   top: 3px;

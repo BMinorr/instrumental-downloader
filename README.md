@@ -129,6 +129,8 @@ Tunebat analizează fișierele **local, în browser** (nu le trimite pe niciun s
 3. salvează fișierul din nou sub **numele final**, cu BPM și cheie și în tag-uri (MP3/FLAC: `TBPM`/`TKEY`, `BPM`/`INITIALKEY`), apoi **șterge prima copie** — dar doar după ce copia nouă s-a terminat de salvat; dacă orice pas eșuează, prima copie rămâne neatinsă
 4. scrie rezultatul în History (și în coadă) — extensia îl arată sub butoanele de format într-un **tabel cu două coloane** (BPM | Key), fără alt text; cât timp analiza rulează, celulele arată un spinner
 
+**Tabelul de reverb** — sub tabelul BPM | Key (carduri și History), imediat ce BPM-ul e cunoscut, apare un tabel cu trei coloane: *Reverb size* | *Pre-delay* | *Decay time*, calculat local din BPM cu aceeași formulă ca [calculatorul de pe anotherproducer.com](https://anotherproducer.com/online-tools-for-musicians/delay-reverb-time-calculator/). Un click pe orice celulă copiază valoarea (numărul, fără „ms", gata de lipit într-un plugin). Se afișează doar în UI; nu intră în numele fișierului.
+
 Mai multe fișiere la rând (o coadă, un playlist) folosesc **același tab Tunebat** — pagina se încarcă o singură dată — care se închide după câteva secunde de inactivitate. AIFF și Opus nu sunt acceptate de Tunebat, iar un fișier lossless foarte mare (peste 30 MB) e lent de predat paginii: pentru ele se analizează o copie WAV mono 22 kHz făcută pe loc (~4× mai mică, cu tot ce trebuie pentru BPM și cheie; nu se salvează nicăieri). Se poate opri, sau se poate lăsa tab-ul deschis / prima copie nesștearsă, din Settings → „BPM & key (Tunebat)". Cu „Ask where to save each file" pornit, analiza rulează dar fișierul nu se mai salvează a doua oară (nu vrem un al doilea dialog).
 
 ## Viteza descărcării

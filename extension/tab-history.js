@@ -59,6 +59,66 @@ function buildAnalysisTable(state, values = {}, { compact = false } = {}) {
   return table;
 }
 
+// Reverb settings that fit a tempo — same maths as anotherproducer.com's Delay & Reverb calculator.
+// One bar (4/4) lasts 240000 / bpm ms. Total reverb time = a note length of the bar; the pre-delay
+// is a short fraction of the bar (1/32, 1/64, 1/128, 1/512) and the decay time is what remains.
+const REVERB_SIZES = [
+  { name: "Hall (2 Bars)", bars: 2, preDelayDiv: 32 },
+  { name: "Large Room (1 Bar)", bars: 1, preDelayDiv: 64 },
+  { name: "Small Room (1/2 Note)", bars: 1 / 2, preDelayDiv: 128 },
+  { name: "Tight Ambience (1/4 Note)", bars: 1 / 4, preDelayDiv: 512 },
+];
+
+const roundMs = (ms) => parseFloat(ms.toFixed(2));
+
+function reverbTimes(bpm) {
+  const bar = 240000 / bpm;
+  return REVERB_SIZES.map(({ name, bars, preDelayDiv }) => {
+    const preDelay = bar / preDelayDiv;
+    return { name, preDelay: roundMs(preDelay), decay: roundMs(bar * bars - preDelay) };
+  });
+}
+
+// Puts `text` on the clipboard and flashes "Copied" on the cell that was clicked.
+async function copyFromCell(cell, text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    return;
+  }
+  cell.classList.add("copied");
+  clearTimeout(cell.copyTimer);
+  cell.copyTimer = setTimeout(() => cell.classList.remove("copied"), 700);
+}
+
+// Three columns: Reverb size | Pre-delay | Decay time. Every cell copies its value on click
+// (numbers without the "ms", ready to paste into a plugin field).
+function buildReverbTable(bpm, { compact = false } = {}) {
+  const table = document.createElement("table");
+  table.className = `analysis-table reverb-table${compact ? " compact" : ""}`;
+  const head = table.createTHead().insertRow();
+  for (const label of ["Reverb size", "Pre-delay", "Decay time"]) {
+    head.appendChild(Object.assign(document.createElement("th"), { textContent: label }));
+  }
+  const body = table.createTBody();
+  for (const { name, preDelay, decay } of reverbTimes(bpm)) {
+    const row = body.insertRow();
+    for (const [shown, copied] of [[name, name], [`${preDelay} ms`, String(preDelay)], [`${decay} ms`, String(decay)]]) {
+      const cell = row.insertCell();
+      cell.textContent = shown;
+      cell.className = "copyable";
+      cell.title = "Click to copy";
+      cell.addEventListener("click", () => copyFromCell(cell, copied));
+    }
+  }
+  return table;
+}
+
+// The reverb table for an analyzed entry (needs the BPM), or null.
+function reverbTableFor(entry, options) {
+  return analysisState(entry) === "done" && entry.bpm > 0 ? buildReverbTable(entry.bpm, options) : null;
+}
+
 // "pending" | "done" | "failed" from an entry's `analysis` field (pending/analyzing both spin).
 function analysisState(entry) {
   return entry.analysis === "done" ? "done" : entry.analysis === "failed" ? "failed" : "pending";
@@ -79,7 +139,11 @@ function buildHistoryRow(entry) {
   meta.textContent = `${entry.format.toUpperCase()} · ${SOURCE_LABELS[entry.source] || ""} · ${relativeTime(entry.ts)}`;
   info.append(title, meta);
 
-  if (entry.analysis) info.appendChild(buildAnalysisTable(analysisState(entry), entry, { compact: true }));
+  if (entry.analysis) {
+    info.appendChild(buildAnalysisTable(analysisState(entry), entry, { compact: true }));
+    const reverb = reverbTableFor(entry, { compact: true });
+    if (reverb) info.appendChild(reverb);
+  }
 
   const status = document.createElement("p");
   status.className = "meta history-status hidden";
@@ -194,6 +258,8 @@ function renderResultCard(el, entry, onRetry) {
   el.classList.toggle("hidden", !entry || !entry.analysis);
   if (!entry || !entry.analysis) return;
   el.appendChild(buildAnalysisTable(analysisState(entry), entry));
+  const reverb = reverbTableFor(entry);
+  if (reverb) el.appendChild(reverb);
   if (entry.analysis === "failed" && onRetry) {
     const retry = iconButton(ICON_RETRY, "Try again", onRetry);
     retry.classList.add("result-retry");
