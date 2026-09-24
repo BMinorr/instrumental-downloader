@@ -6,7 +6,7 @@ const fs = require("fs");
 const youtube = require("./lib/youtube");
 const instagram = require("./lib/instagram");
 const { resolveSpotifyToYoutube } = require("./lib/spotify");
-const { convertToFormat, isSupportedFormat, outputIdFor } = require("./lib/ytdlp");
+const { convertToFormat, isSupportedFormat, outputIdFor, runFfmpeg } = require("./lib/ytdlp");
 const ytdlpUpdate = require("./lib/ytdlp-update");
 
 // Picks the right platform module for a URL (YouTube, or a resolved-from-Spotify
@@ -215,6 +215,40 @@ app.post("/api/convert-stash", async (req, res) => {
     const filePath = await convertToFormat(sourcePath, format, DOWNLOADS_DIR, outputId, options);
     const filename = path.basename(filePath);
     res.json({ downloadUrl: `/files/${encodeURIComponent(filename)}`, filename });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Writes BPM + key into a copy of an existing (cached) MP3/FLAC — a stream copy, no
+// re-encode, so it takes a moment and loses nothing. Used by the extension's "rename with
+// BPM & key" after Tunebat's analysis. Other formats get the new name only (no tags).
+const ANNOTATE_KEYS = {
+  mp3: (bpm, key) => ["-id3v2_version", "3", "-metadata", `TBPM=${bpm}`, "-metadata", `TKEY=${key}`],
+  flac: (bpm, key) => ["-metadata", `BPM=${bpm}`, "-metadata", `INITIALKEY=${key}`],
+};
+app.post("/api/annotate", async (req, res) => {
+  try {
+    const { file, bpm, key } = req.body || {};
+    const name = path.basename(String(file || ""));
+    const ext = path.extname(name).slice(1).toLowerCase();
+    if (!ANNOTATE_KEYS[ext]) throw new Error("Formatul nu suportă etichete BPM/cheie.");
+    const source = path.join(DOWNLOADS_DIR, name);
+    if (!name || !fs.existsSync(source)) throw new Error("Fișierul a expirat de pe server.");
+    const bpmValue = Math.round(Number(bpm));
+    if (!Number.isFinite(bpmValue) || bpmValue < 20 || bpmValue > 400) throw new Error("BPM invalid.");
+    const keyValue = String(key || "").replace(/[^A-Ga-g#b♯♭mM]/g, "").slice(0, 6);
+
+    const outName = `annot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const partial = path.join(DOWNLOADS_DIR, `${outName}.partial.${ext}`);
+    try {
+      await runFfmpeg(["-y", "-i", source, "-map", "0", "-c", "copy", ...ANNOTATE_KEYS[ext](bpmValue, keyValue), partial]);
+      fs.renameSync(partial, path.join(DOWNLOADS_DIR, outName));
+    } catch (err) {
+      fs.rmSync(partial, { force: true });
+      throw err;
+    }
+    res.json({ downloadUrl: `/files/${encodeURIComponent(outName)}`, filename: outName });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -45,6 +45,8 @@ const SETTING_KEYS = {
   formats: "settings.formats",
   tags: "settings.tags",
   fileNameTemplate: "settings.fileNameTemplate",
+  analysisNameTemplate: "settings.analysisNameTemplate",
+  deleteOriginal: "settings.deleteOriginal",
 };
 const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
 
@@ -68,6 +70,8 @@ async function getSettings() {
     formats: validFormatIds(items[SETTING_KEYS.formats]),
     tags: items[SETTING_KEYS.tags] ?? true,
     fileNameTemplate: items[SETTING_KEYS.fileNameTemplate] || "{title}",
+    analysisNameTemplate: items[SETTING_KEYS.analysisNameTemplate] || DEFAULT_ANALYSIS_TEMPLATE,
+    deleteOriginal: items[SETTING_KEYS.deleteOriginal] ?? false,
   };
 }
 
@@ -152,3 +156,40 @@ function withYtdlpHint(message) {
     : message;
 }
 
+
+
+// --- Tunebat analysis results (BPM / key) ---
+// background.js reads them off the Tunebat page after a file is analyzed and stores them
+// per server file URL; the popup shows them and can save a copy named with BPM + key.
+
+const ANALYSIS_PREFIX = "analysis:";
+
+const DEFAULT_ANALYSIS_TEMPLATE = "{title} - {bpm}bpm - {keyshort}";
+
+async function getAnalysis(fileUrl) {
+  if (!fileUrl) return null;
+  const items = await chrome.storage.local.get(ANALYSIS_PREFIX + fileUrl);
+  return items[ANALYSIS_PREFIX + fileUrl] || null;
+}
+
+// "A minor" -> "Am", "F# major" -> "F#", "B♭ minor" -> "Bbm" (short form for file names).
+function shortKey(key) {
+  const match = String(key || "").trim().match(/^([A-G])\s*([#♯b♭]?)\s*(major|minor)$/i);
+  if (!match) return "";
+  const accidental = match[2].replace("♯", "#").replace("♭", "b");
+  return `${match[1].toUpperCase()}${accidental}${match[3].toLowerCase() === "minor" ? "m" : ""}`;
+}
+
+// Name for the "with BPM & key" copy. Placeholders: {title} (the saved file's name),
+// {bpm}, {key} ("A minor"), {keyshort} ("Am"), {camelot} ("8A").
+function buildAnalysisName(template, values) {
+  const name = String(template || DEFAULT_ANALYSIS_TEMPLATE)
+    .replace(/\{(title|bpm|key|keyshort|camelot)\}/g, (_, k) => values[k] ?? "")
+    .replace(/\(\s*\)|\[\s*\]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–_.]+|[\s\-–_.]+$/g, "")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .slice(0, 150)
+    .trim();
+  return name || "instrumental";
+}

@@ -87,6 +87,12 @@ function buildHistoryRow(entry) {
   actions.appendChild(tunebat);
 
   // Link downloads can be fetched again in any other format.
+  const analysisCard = buildAnalysisCard(
+    () => ({ fileUrl: entry.fileUrl, filename: entry.filename, downloadId: entry.downloadId, source: entry.source, mediaUrl: entry.mediaUrl }),
+    setStatus
+  );
+  analysisCard.el.classList.add("history-analysis");
+
   let grid = null;
   if (entry.source === "link" && entry.mediaUrl) {
     const convertArea = document.createElement("div");
@@ -98,10 +104,10 @@ function buildHistoryRow(entry) {
         row.classList.toggle("open");
       })
     );
-    row.append(info, actions, status, convertArea);
+    row.append(info, actions, analysisCard.el, status, convertArea);
     getSettings().then((s) => grid.setVisible(s.formats));
   } else {
-    row.append(info, actions, status);
+    row.append(info, actions, analysisCard.el, status);
   }
   return row;
 }

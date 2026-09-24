@@ -19,7 +19,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
   const bundleKey = `bundle:${pending.cacheKey}`;
   const bundleItems = await chrome.storage.local.get(bundleKey);
   const bundle = bundleItems[bundleKey] || {};
-  bundle.downloadedFile = { fileUrl: pending.fileUrl, filename: pending.filename };
+  bundle.downloadedFile = { fileUrl: pending.fileUrl, filename: pending.filename, downloadId: delta.id };
   await chrome.storage.local.set({ [bundleKey]: bundle });
 });
 
@@ -235,6 +235,7 @@ async function openInTunebat(fileUrl, filename) {
     if (!result?.ok) {
       throw new Error(result?.reason || "Could not insert the file into Tunebat's page.");
     }
+    watchTunebatResult(tab.id, filename, fileUrl); // not awaited: it runs long after the popup is gone
   } catch (err) {
     // The popup is long gone by now (opening the tab closed it), so an error can't be
     // shown there — put it on the Tunebat page itself instead.
@@ -297,6 +298,72 @@ function showPageToast(message) {
     "font:13px -apple-system,Segoe UI,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.45)";
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 10000);
+}
+
+// --- Reading Tunebat's answer (BPM + key) ---
+// Tunebat analyzes in the page; we read the result row back so the popup can offer to name
+// the file with it. Its CSS class names are hashed and change between deploys, so the row is
+// found by content: the element showing the file name, and the nearest ancestor that also
+// shows a key ("A minor") — then key / Camelot code / BPM are picked out by their shape.
+
+function readTunebatResult(filename) {
+  const leaves = [...document.querySelectorAll("body *")].filter(
+    (e) => e.children.length === 0 && e.textContent.trim() === filename
+  );
+  const nameEl = leaves[leaves.length - 1];
+  if (!nameEl) return null;
+
+  const KEY = /^[A-G][#♯b♭]?\s+(major|minor)$/i;
+  const textsOf = (root) =>
+    [...root.querySelectorAll("*")]
+      .filter((e) => e.children.length === 0 && e !== nameEl)
+      .map((e) => e.textContent.trim())
+      .filter(Boolean);
+
+  // Climb from the file name until the enclosing element also holds a key cell (so a file
+  // name that itself says "minor" can't be mistaken for one).
+  let row = nameEl.parentElement;
+  for (let i = 0; i < 6 && row && !textsOf(row).some((t) => KEY.test(t)); i++) row = row.parentElement;
+  if (!row) return null;
+
+  const texts = textsOf(row);
+  const key = texts.find((t) => KEY.test(t));
+  const camelot = texts.find((t) => /^\d{1,2}[AB]$/.test(t));
+  const bpm = texts.find((t) => /^\d{2,3}(\.\d+)?$/.test(t));
+  return key && bpm ? { key, camelot: camelot || "", bpm: Number(bpm) } : null;
+}
+
+async function watchTunebatResult(tabId, filename, fileUrl) {
+  const deadline = Date.now() + 90000; // big files take a while; give up after 90 s
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 700));
+    let result;
+    try {
+      const [injection] = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: "MAIN",
+        func: readTunebatResult,
+        args: [filename],
+      });
+      result = injection?.result;
+    } catch {
+      return; // the tab was closed or navigated away
+    }
+    if (result) {
+      await saveAnalysis(fileUrl, { ...result, filename, ts: Date.now() });
+      return;
+    }
+  }
+}
+
+async function saveAnalysis(fileUrl, analysis) {
+  // Keep the store tidy: results older than a day are dropped (the server copy is long gone).
+  const all = await chrome.storage.local.get(null);
+  const stale = Object.keys(all).filter(
+    (k) => k.startsWith(ANALYSIS_PREFIX) && Date.now() - (all[k]?.ts || 0) > 24 * 3600 * 1000
+  );
+  if (stale.length) await chrome.storage.local.remove(stale);
+  await chrome.storage.local.set({ [ANALYSIS_PREFIX + fileUrl]: analysis });
 }
 
 const AUDIO_MIME_TYPES = {

@@ -7,7 +7,7 @@ Extensie Chrome + server local pentru descărcarea instrumentalelor pe care ți 
 **Faza 3 (gata):** Instagram — Story, Reel și Post, cu autentificare din Chrome (vezi mai jos).
 **Faza 4 (gata):** tab „Sample" — înregistrează audio-ul care redă din tab-ul curent (ex. un beat pe care clientul ți-l cântă live într-un apel video), apoi descarcă-l ca MP3 320kbps sau WAV.
 
-Extensia are trei tab-uri principale: **File** (alegi/tragi un fișier audio local, îl convertești în alt format sau îl trimiți în Tunebat), **Link** (fluxul YouTube/Spotify/Instagram de mai sus — tab-ul implicit) și **Sample** (înregistrare directă din tab), plus **Settings**. Detecția de BPM/Key nu mai e integrată în extensie (rezultate inconsistente) — în schimb, după ce o piesă e efectiv descărcată, apare un buton **„Analyze BPM & Key on Tunebat"** care deschide [tunebat.com/Analyzer](https://tunebat.com/Analyzer) într-un tab nou cu **fișierul deja inserat automat** acolo.
+Extensia are tab-urile **File** (alegi/tragi un fișier audio local, îl convertești sau îl trimiți în Tunebat), **Link** (YouTube/Spotify/Instagram — tab-ul implicit; poți și lipi un link), **Sample** (înregistrare directă din tab), **Queue** (mai multe link-uri sau un playlist, în fundal), plus **History** (ceasul) și **Settings** (rotița). Detecția de BPM/Key nu mai e integrată în extensie (rezultate inconsistente) — în schimb, după ce o piesă e efectiv descărcată, apare un buton **„Analyze BPM & Key on Tunebat"** care deschide [tunebat.com/Analyzer](https://tunebat.com/Analyzer) într-un tab nou cu **fișierul deja inserat automat** acolo.
 
 ## De ce ai nevoie de un server local
 
@@ -236,6 +236,40 @@ Pentru un fișier pe care îl ai deja pe disc (trimis de client pe WhatsApp/mail
 
 Copia de pe server (`/api/stash`, `/api/convert-stash`) se șterge automat după 1 oră. Conversiile din File **nu** normalizează volumul implicit (fișierul păstrează exact nivelul original); comutatorul „File conversions" din Settings îl activează.
 
+## Link: lipește un link
+
+Câmpul de sus din tab-ul Link încarcă un link fără să deschizi pagina lui: copiezi link-ul primit de la client, deschizi extensia, lipești (Ctrl/Cmd+V) — se încarcă singur. Merge și cu text în jur (extrage link-ul), iar Enter pe câmp gol revine la pagina din tab-ul curent. Pe o pagină nesuportată câmpul are deja focus, deci lipirea e primul pas. Pentru YouTube, titlul și thumbnail-ul apar imediat din oEmbed.
+
+## Tab-ul Queue (mai multe link-uri / playlist)
+
+Lipești mai multe link-uri (unul pe rând) sau un **link de playlist YouTube** (`/playlist?list=…` sau un link de video cu `list=…`; până la 100 de piese), alegi formatul și „Add to queue". Coada rulează **în fundal** (service worker-ul extensiei), deci continuă cu popup-ul închis: câte o piesă pe rând, fiecare salvată cu numele și setările tale (subfolder, tag-uri, normalizare). Pe icon apare câte au mai rămas, apoi ✓ (sau ! dacă au fost erori). Dacă browserul oprește worker-ul la jumătate, piesa întreruptă reia singură. Spotify: doar piese individuale (nu playlist-uri/albume). Coada ignoră „Ask where to save" — un dialog pentru fiecare piesă ar strica rostul cozii.
+
+## Tab-ul History
+
+Ultimele 30 de descărcări (Link, Sample, File), fiecare cu: **Show in folder**, **Analyze on Tunebat** (dacă fișierul de pe server a expirat, pentru Link se aduce din nou) și — pentru Link — **Download again in another format**. „Clear history" îl golește; „Clear cached data" din Settings îl păstrează.
+
+## BPM & Key în numele fișierului
+
+După ce trimiți o piesă în Tunebat, extensia **citește rezultatul** (BPM, cheie, cod Camelot) de pe pagina Tunebat și îl păstrează. Când redeschizi extensia, sub butonul Tunebat (Link/Sample) sau în History apare `140 BPM · A minor · 8A` și **„Rename with BPM & key"**: salvează o copie numită după șablonul din Settings (implicit `{title} - {bpm}bpm - {keyshort}` → `Beat - 140bpm - Am.mp3`). La **MP3 și FLAC** BPM-ul și cheia se scriu și în tag-uri (TBPM/TKEY, BPM/INITIALKEY — le văd DJ-softurile); la celelalte formate se schimbă doar numele. Chrome nu poate redenumi un fișier deja descărcat, deci rămâne originalul — opțiunea **„Delete original when renaming"** (implicit oprită) îl șterge după salvarea copiei. Citirea rezultatului depinde de structura paginii Tunebat; dacă își schimbă pagina, apare doar mesajul lipsă (nimic nu se strică).
+
+## Tab-ul Sample: Trim silence și fade
+
+Sub waveform: **Trim silence** mută mânerele pe primul și ultimul sunet (prag -40 dBFS, cu 50 ms înainte și 150 ms după), **Fade in / Fade out** (off, 0,5 s, 1 s, 2 s) se aplică la export. Trim-ul și fade-urile rulează în ffmpeg ca filtre pe aceeași axă de timp (deci fade-out-ul începe exact înainte de capătul tăiat).
+
+**Înregistrare fără popup:** scurtătura **Alt+Shift+R** (schimbabilă în Chrome → Extensions → Keyboard shortcuts, sau din Settings → Change) pornește/oprește înregistrarea tab-ului curent fără să deschizi extensia. Iconița arată **REC** cât înregistrează și **✓** când e gata; deschide popup-ul ca s-o preiei.
+
+## Nume de fișier, tag-uri și copertă
+
+Settings → Downloads → **File name**: șablon cu `{title}` și `{uploader}` (ex. `{uploader} - {title}`; separatoarele rămase atârnate se curăță). **Tags & cover art** (implicit ON): descărcările Link primesc titlu, artist (uploader) și linkul sursă, plus imaginea videoclipului (tăiată pătrat, 600 px) drept copertă — în MP3, M4A, FLAC și AIFF; WAV primește doar tag-uri text, Opus doar tag-uri.
+
+## Actualizare yt-dlp din extensie
+
+Settings → **yt-dlp** arată versiunea instalată și dacă există una mai nouă. „Update" o actualizează cu aceeași metodă cu care a fost instalat (`brew upgrade yt-dlp` pe Mac cu Homebrew, `winget upgrade` pe Windows cu winget, altfel `yt-dlp -U`). Când o descărcare eșuează cu o eroare de tip yt-dlp, mesajul te trimite aici. *(Actualizarea propriu-zisă n-a fost rulată în testele mele, ca să nu modific software-ul instalat; verificarea versiunii e testată.)*
+
+## Securitate
+
+Serverul local răspunde doar extensiei: orice cerere cu un `Origin` care nu e `chrome-extension://…` primește 403, deci un site web nu poate declanșa descărcări sau o actualizare yt-dlp prin `fetch`/formular către `127.0.0.1:5177`. (Doar pentru teste: variabila `ALLOWED_ORIGINS="http://host:port"` adaugă origini.)
+
 ## Tab-ul Settings
 
 Rotița din colțul dreapta sus. Setările se salvează automat și se păstrează chiar dacă apeși „Clear cached data".
@@ -245,10 +279,14 @@ Rotița din colțul dreapta sus. Setările se salvează automat și se păstreaz
 **Downloads**
 - *Ask where to save each file* — deschide dialogul „Save as" de fiecare dată
 - *Subfolder* — salvează în `Downloads/<subfolder>` (ex. `Instrumentals` sau `Clients/Ana`); caracterele nepermise și `..` sunt eliminate
+- *File name*, *Tags & cover art*, *BPM & key name*, *Delete original when renaming* — vezi secțiunile de mai sus
+
+**Formats shown** — alegi ce formate apar în grile (minim unul)
 
 **General**
 - *Open on* — ultimul tab folosit (implicit) sau mereu File / Link / Sample
 - *Prepare MP3 & WAV in advance* — pregătirea în fundal descrisă la „Viteza descărcării"; dezactiv-o ca să economisești baterie
+- *Record shortcut* — tasta curentă pentru pornit/oprit înregistrarea (vezi Sample)
 
 **Local server** — aici stă acum indicatorul de status (înainte era bulina din header): punct verde/roșu + „Connected" / „Not connected" (cât timp serverul nu răspunde, rotița are și un punct roșu, vizibil din orice tab), buton de reverificare și o explicație scurtă despre ce face serverul local.
 
@@ -296,6 +334,9 @@ instrumental-downloader/
 │   └── lib/ytdlp.js, lib/youtube.js, lib/instagram.js, lib/spotify.js
 ├── extension/            # Extensie Chrome (Manifest V3)
 │   ├── manifest.json
+│   ├── shared.js         # setări, nume de fișiere, istoric, helper de descărcare (popup + worker)
+│   ├── queue-engine.js   # coada de descărcări (rulează în worker)
+│   ├── history.js, queue.js, analysis.js   # partea de popup a tab-urilor History/Queue + card BPM/key
 │   ├── icons/             # icon-ul extensiei (16/32/48/128px)
 │   ├── popup.html/css/js  # tab-uri File + Link + Sample + Settings
 │   ├── background.js     # service worker: descărcări, Tunebat, coordonare Sample

@@ -46,6 +46,8 @@ const els = {
   formatChips: document.getElementById("format-chips"),
   settingTags: document.getElementById("setting-tags"),
   settingFileName: document.getElementById("setting-file-name"),
+  settingAnalysisName: document.getElementById("setting-analysis-name"),
+  settingDeleteOriginal: document.getElementById("setting-delete-original"),
   tabQueue: document.getElementById("tab-queue"),
   panelQueue: document.getElementById("panel-queue"),
   queueInput: document.getElementById("queue-input"),
@@ -200,6 +202,19 @@ function setServerAlert(down) {
 
 async function main() {
   els.btnTunebat.addEventListener("click", makeTunebatHandler(els.btnTunebat, els.progress));
+  initAnalysisUpdates();
+  const linkCard = buildAnalysisCard(
+    () => ({ fileUrl: els.btnTunebat.dataset.fileUrl, filename: els.btnTunebat.dataset.filename, downloadId: els.btnTunebat.dataset.downloadId, source: "link", mediaUrl: currentMedia?.url }),
+    (text) => { els.progress.classList.remove("hidden"); els.progress.textContent = text; }
+  );
+  els.btnTunebat.after(linkCard.el);
+  analysisCardFor.set(els.btnTunebat, linkCard);
+  const sampleCard = buildAnalysisCard(
+    () => ({ fileUrl: els.sampleBtnTunebat.dataset.fileUrl, filename: els.sampleBtnTunebat.dataset.filename, downloadId: els.sampleBtnTunebat.dataset.downloadId, source: "sample" }),
+    (text) => { els.sampleProgress.classList.remove("hidden"); els.sampleProgress.textContent = text; }
+  );
+  els.sampleBtnTunebat.after(sampleCard.el);
+  analysisCardFor.set(els.sampleBtnTunebat, sampleCard);
   getSettings().then((settings) => applyVisibleFormats(settings.formats));
   initFileTab();
   initHistoryTab();
@@ -290,6 +305,8 @@ function resetLinkView() {
   els.btnTunebat.classList.add("hidden");
   delete els.btnTunebat.dataset.fileUrl;
   delete els.btnTunebat.dataset.filename;
+  delete els.btnTunebat.dataset.downloadId;
+  analysisCardFor.get(els.btnTunebat)?.refresh();
   els.thumbnail.removeAttribute("src");
 }
 
@@ -516,7 +533,7 @@ function trackDownloadCompletion(downloadId, fileUrl, filename, buttonEl, cacheK
     if (delta.id !== downloadId) return;
     if (delta.state && delta.state.current === "complete") {
       chrome.downloads.onChanged.removeListener(onChanged);
-      updateTunebatButton(buttonEl, { fileUrl, filename });
+      updateTunebatButton(buttonEl, { fileUrl, filename, downloadId });
     } else if (delta.state && delta.state.current === "interrupted") {
       chrome.downloads.onChanged.removeListener(onChanged);
     }
@@ -524,11 +541,17 @@ function trackDownloadCompletion(downloadId, fileUrl, filename, buttonEl, cacheK
   chrome.downloads.onChanged.addListener(onChanged);
 }
 
+// Analysis card (BPM/key + rename) that sits under each Tunebat button; see analysis.js.
+const analysisCardFor = new Map();
+
 function updateTunebatButton(buttonEl, downloadedFile) {
   if (!downloadedFile) return;
   buttonEl.dataset.fileUrl = downloadedFile.fileUrl;
   buttonEl.dataset.filename = downloadedFile.filename;
+  if (downloadedFile.downloadId) buttonEl.dataset.downloadId = downloadedFile.downloadId;
+  else delete buttonEl.dataset.downloadId;
   buttonEl.classList.remove("hidden");
+  analysisCardFor.get(buttonEl)?.refresh();
 }
 
 function makeTunebatHandler(buttonEl, progressEl) {
@@ -832,9 +855,13 @@ async function initSampleTab() {
   });
 
   const status = await sendToBackground({ type: "sample:status" });
-  // A recording finished with the keyboard shortcut leaves a "✓" on the toolbar icon;
+  // A finished recording (keyboard shortcut) or queue leaves a "✓"/"!" on the toolbar icon;
   // opening the popup is how you pick it up, so clear it.
-  if (!status?.recording) chrome.action?.setBadgeText({ text: "" });
+  if (!status?.recording) {
+    chrome.action?.getBadgeText?.({}).then((text) => {
+      if (text === "✓" || text === "!") chrome.action.setBadgeText({ text: "" }); // keep a queue's "3 left" count
+    });
+  }
   if (status?.recording) {
     enterRecordingUI(status.elapsedMs);
     return;
@@ -1353,6 +1380,8 @@ async function initSettingsTab() {
   els.settingPrefetch.checked = settings.prefetch;
   els.settingTags.checked = settings.tags;
   els.settingFileName.value = settings.fileNameTemplate === "{title}" ? "" : settings.fileNameTemplate;
+  els.settingAnalysisName.value = settings.analysisNameTemplate === DEFAULT_ANALYSIS_TEMPLATE ? "" : settings.analysisNameTemplate;
+  els.settingDeleteOriginal.checked = settings.deleteOriginal;
   buildFormatChips(settings.formats);
 
   const checkbox = (el) => () => el.checked;
@@ -1367,6 +1396,8 @@ async function initSettingsTab() {
     [els.settingStartTab, SETTING_KEYS.startTab, "change", value(els.settingStartTab)],
     [els.settingPrefetch, SETTING_KEYS.prefetch, "change", checkbox(els.settingPrefetch)],
     [els.settingTags, SETTING_KEYS.tags, "change", checkbox(els.settingTags)],
+    [els.settingAnalysisName, SETTING_KEYS.analysisNameTemplate, "input", () => els.settingAnalysisName.value.trim() || DEFAULT_ANALYSIS_TEMPLATE],
+    [els.settingDeleteOriginal, SETTING_KEYS.deleteOriginal, "change", checkbox(els.settingDeleteOriginal)],
     [els.settingFileName, SETTING_KEYS.fileNameTemplate, "input", () => els.settingFileName.value.trim() || "{title}"],
   ];
   for (const [el, key, eventName, read] of bindings) {
