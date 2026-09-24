@@ -1,22 +1,8 @@
+const TUNEBAT_OK = ["mp3", "wav", "flac", "aac", "ogg", "m4a"]; // what Tunebat's uploader accepts
+
 // History tab: the last downloads, with quick actions. Loaded before popup.js; everything
 // here is called from popup.js after both scripts have loaded (it uses popup.js's `els`,
 // `SERVER`, `FORMATS`, `createFormatGrid`, `getNormalizeOptions`, `startDownload` at call time).
-
-const HISTORY_KEY = "history";
-const HISTORY_MAX = 30;
-const TUNEBAT_OK = ["mp3", "wav", "flac", "aac", "ogg", "m4a"]; // what Tunebat's uploader accepts
-
-async function loadHistory() {
-  const items = await chrome.storage.local.get(HISTORY_KEY);
-  return Array.isArray(items[HISTORY_KEY]) ? items[HISTORY_KEY] : [];
-}
-
-// Called by startDownload() for every download that was actually started.
-async function recordHistory(entry) {
-  const list = await loadHistory();
-  list.unshift({ ...entry, ts: Date.now() });
-  await chrome.storage.local.set({ [HISTORY_KEY]: list.slice(0, HISTORY_MAX) });
-}
 
 function relativeTime(ts) {
   const diff = Math.round((ts - Date.now()) / 1000);
