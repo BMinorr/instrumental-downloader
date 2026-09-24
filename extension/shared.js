@@ -193,3 +193,38 @@ function buildAnalysisName(template, values) {
     .trim();
   return name || "instrumental";
 }
+
+
+// --- Link helpers used by the popup and the queue ---
+
+function extractMediaId(url) {
+  const ytMatch = url.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{6,})/i);
+  if (ytMatch) return ytMatch[1];
+  const igMatch = url.match(/instagram\.com\/(?:stories\/[\w.]+(?:\/(\d+))?|(?:p|reels?)\/([\w-]+))/i);
+  if (igMatch) return igMatch[1] || igMatch[2];
+  const spMatch = url.match(/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?track\/([\w]+)/i);
+  if (spMatch) return `spotify-${spMatch[1]}`;
+  return null;
+}
+
+function detectPlatform(url) {
+  if (!url) return "unknown";
+  if (/(^https?:\/\/(www\.|m\.)?youtube\.com\/)|(^https?:\/\/youtu\.be\/)/i.test(url)) {
+    return "youtube";
+  }
+  if (/open\.spotify\.com/i.test(url)) return "spotify";
+  if (/instagram\.com/i.test(url)) return "instagram";
+  return "unknown";
+}
+
+function formatDuration(seconds) {
+  if (!seconds && seconds !== 0) return "";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+// Checks the local server and shows the result in Settings > Local server (dot + text),
+// plus a red dot on the Settings gear while it's unreachable so it's visible from any tab.
