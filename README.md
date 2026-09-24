@@ -17,6 +17,24 @@ Serverul pornește **automat la login** (pe Mac și pe Windows) și rulează în
 
 ## 1. Instalare (o singură dată)
 
+### Instalare rapidă (calculator nou sau un prieten) — un singur fișier
+
+Repo-ul e public, iar installer-ul instalează **tot**: Git, Node.js, ffmpeg, yt-dlp, aplicația, pornirea automată a serverului. Singurul pas manual rămas e încărcarea extensiei în Chrome (Chrome nu permite altfel), iar installer-ul îl ghidează (deschide Chrome și folderul, copiază calea).
+
+- **Windows:** trimite fișierul [`install/Install-Windows.bat`](install/Install-Windows.bat) și spune-i să dea dublu-click (Windows poate cere permisiuni; e normal). Sau, într-un PowerShell:
+  ```powershell
+  irm https://raw.githubusercontent.com/BMinorr/instrumental-downloader/main/install/install.ps1 | iex
+  ```
+- **Mac:** într-un Terminal:
+  ```bash
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/BMinorr/instrumental-downloader/main/install/install.sh)"
+  ```
+  (sau [`install/Install-Mac.command`](install/Install-Mac.command), click dreapta → Open la prima rulare)
+
+**De ce rămâne valabil în timp:** fișierul `.bat`/`.command` conține doar adresa installer-ului, care se descarcă de fiecare dată **în versiunea de atunci** și instalează ultima versiune a aplicației. Deci un fișier primit la v0.1.0 instalează corect și peste un an. După instalare, actualizările vin din extensie (Settings → Updates). Installer-ul se poate rula oricând din nou (repară ce lipsește, aduce ultima versiune). Aplicația se instalează în `~/InstrumentalDownloader` (Windows: `%USERPROFILE%\InstrumentalDownloader`).
+
+Instalarea manuală, pas cu pas, e descrisă mai jos.
+
 ### Pe Mac (acasă / testare)
 
 Deschide Terminal și rulează pe rând:
