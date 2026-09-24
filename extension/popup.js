@@ -48,6 +48,7 @@ async function main() {
   ensureLinkLoaded();
   // The Link flow checks the server itself; with that tab hidden, still show the status.
   if (!linkLoaded) checkServer();
+  startupUpdateCheck();
 }
 
 // The Link tab's work (analysis + background prefetch on the server) starts only if the tab
@@ -104,7 +105,7 @@ function switchTab(which) {
     panel.classList.toggle("hidden", !isActive);
   }
   chrome.storage.local.set({ activeTab: which });
-  if (which === "settings") refreshYtdlpStatus();
+  if (which === "settings") onSettingsOpened();
   if (which === "history") renderHistory();
   if (which === "link") ensureLinkLoaded();
 }

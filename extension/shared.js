@@ -118,6 +118,7 @@ const SETTING_KEYS = {
   deleteOriginal: "settings.deleteOriginal",
   closeTunebatTab: "settings.closeTunebatTab",
   queueConcurrency: "settings.queueConcurrency",
+  autoUpdateCheck: "settings.autoUpdateCheck",
 };
 const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
 const LEGACY_ANALYZE_KEY = "settings.analyze"; // ditto for the Tunebat analysis
@@ -161,6 +162,7 @@ async function getSettings() {
     keyStyle: KEY_STYLES.some((k) => k.value === items[SETTING_KEYS.keyStyle]) ? items[SETTING_KEYS.keyStyle] : "short",
     deleteOriginal: items[SETTING_KEYS.deleteOriginal] ?? true,
     closeTunebatTab: items[SETTING_KEYS.closeTunebatTab] ?? true,
+    autoUpdateCheck: items[SETTING_KEYS.autoUpdateCheck] ?? true,
     queueConcurrency: [1, 2, 3].includes(Number(items[SETTING_KEYS.queueConcurrency])) ? Number(items[SETTING_KEYS.queueConcurrency]) : 2,
   };
 }

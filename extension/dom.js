@@ -108,6 +108,10 @@ const els = {
   btnShortcuts: $("btn-shortcuts"),
   ytdlpStatus: $("ytdlp-status"),
   btnYtdlpUpdate: $("btn-ytdlp-update"),
+  appUpdateStatus: $("app-update-status"),
+  btnAppUpdate: $("btn-app-update"),
+  btnCheckUpdates: $("btn-check-updates"),
+  settingAutoUpdate: $("setting-auto-update"),
   appVersion: $("app-version"),
 };
 

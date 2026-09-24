@@ -27,35 +27,88 @@ function buildFormatChips(selected) {
 
 // --- yt-dlp version / update (Settings) ---
 
-let ytdlpChecked = false;
+// --- Updates: this tool (git) and yt-dlp ---
 
-async function refreshYtdlpStatus(force = false) {
-  if (ytdlpChecked && !force) return;
-  ytdlpChecked = true;
-  els.btnYtdlpUpdate.classList.add("hidden");
-  els.ytdlpStatus.textContent = "Checking…";
-  try {
-    const res = await fetch(`${SERVER}/api/ytdlp`);
-    const info = await res.json();
-    if (!res.ok) throw new Error(info.error || "Unknown error.");
-    showYtdlpStatus(info);
-  } catch (err) {
-    ytdlpChecked = false; // try again next time Settings opens
-    els.ytdlpStatus.textContent = err instanceof TypeError ? "Server not connected" : `Error: ${err.message}`;
+const UPDATE_CHECK_KEY = "updateCheck"; // { at, available } from the last check, for the dot on the gear
+const UPDATE_CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
+let updatesChecked = false;
+
+// The dot on the Settings gear: something (this tool or yt-dlp) has a newer version.
+function showUpdateDot(available) {
+  els.tabSettings.classList.toggle("update", available);
+  if (!els.tabSettings.classList.contains("alert")) {
+    els.tabSettings.title = available ? "Settings — update available" : "Settings";
   }
 }
 
-function showYtdlpStatus(info) {
+async function fetchJson(path, options) {
+  const res = await fetch(`${SERVER}${path}`, options);
+  const info = await res.json();
+  if (!res.ok) throw new Error(info.error || "Unknown error.");
+  return info;
+}
+
+// Reads both statuses (with the network check unless `check` is false), fills the two rows and
+// remembers whether anything is available. `force` = ignore "already checked in this popup".
+async function refreshUpdates({ force = false, check = true } = {}) {
+  if (updatesChecked && !force) return;
+  updatesChecked = true;
+  els.btnAppUpdate.classList.add("hidden");
+  els.btnYtdlpUpdate.classList.add("hidden");
+  els.appUpdateStatus.textContent = "Checking…";
+  els.ytdlpStatus.textContent = "Checking…";
+  const query = check ? "" : "?check=0";
+  const [app, ytdlp] = await Promise.allSettled([fetchJson(`/api/app${query}`), fetchJson(`/api/ytdlp${query}`)]);
+  if (app.status === "rejected" && ytdlp.status === "rejected") updatesChecked = false; // try again next time Settings opens
+  showAppStatus(app);
+  showYtdlpStatus(ytdlp);
+  if (check) {
+    const available = app.value?.updateAvailable === true || ytdlp.value?.updateAvailable === true;
+    chrome.storage.local.set({ [UPDATE_CHECK_KEY]: { at: Date.now(), available } });
+    showUpdateDot(available);
+  }
+}
+
+function failureText(result) {
+  const err = result.reason;
+  return err instanceof TypeError ? "Server not connected" : `Error: ${err.message}`;
+}
+
+function showAppStatus(result) {
+  if (result.status === "rejected") {
+    els.appUpdateStatus.textContent = failureText(result);
+    return;
+  }
+  const info = result.value;
+  const version = `v${info.version}${info.commit ? ` (${info.commit})` : ""}`;
+  if (info.method === "manual") {
+    els.appUpdateStatus.textContent = `${version} · installed without Git, update it by hand`;
+  } else if (info.updateAvailable) {
+    els.appUpdateStatus.textContent = `${version} · update available${info.latest ? `: ${info.latest}` : ""}`;
+  } else if (info.checked) {
+    els.appUpdateStatus.textContent = `${version} · up to date`;
+  } else {
+    els.appUpdateStatus.textContent = `${version} · not checked`;
+  }
+  els.btnAppUpdate.classList.toggle("hidden", !info.updateAvailable);
+}
+
+function showYtdlpStatus(result) {
+  if (result.status === "rejected") {
+    els.ytdlpStatus.textContent = failureText(result);
+    return;
+  }
+  const info = result.value;
   const version = `v${info.version}`;
   if (info.updateAvailable) {
     els.ytdlpStatus.textContent = `${version} · update available (${info.latest})`;
-  } else if (info.latest) {
+  } else if (info.checked) {
     els.ytdlpStatus.textContent = `${version} · up to date`;
   } else {
-    els.ytdlpStatus.textContent = `${version} · couldn't check for updates`;
+    els.ytdlpStatus.textContent = `${version} · not checked`;
   }
-  // Offer the update when there is one — or when we couldn't tell (offline check).
-  els.btnYtdlpUpdate.classList.toggle("hidden", !info.updateAvailable && !!info.latest);
+  // Offer the update when there is one, or when a check was possible but failed while online.
+  els.btnYtdlpUpdate.classList.toggle("hidden", !info.updateAvailable);
 }
 
 async function updateYtdlp() {
@@ -63,14 +116,81 @@ async function updateYtdlp() {
   button.disabled = true;
   els.ytdlpStatus.textContent = "Updating… this can take a minute";
   try {
-    const res = await fetch(`${SERVER}/api/ytdlp/update`, { method: "POST" });
-    const info = await res.json();
-    if (!res.ok) throw new Error(info.error || "Unknown error.");
-    showYtdlpStatus(info);
+    const info = await fetchJson("/api/ytdlp/update", { method: "POST" });
+    showYtdlpStatus({ status: "fulfilled", value: info });
+    refreshUpdates({ force: true }); // recompute the dot
   } catch (err) {
     els.ytdlpStatus.textContent = `Update failed: ${err.message.split("\n").pop().slice(0, 90)}`;
   } finally {
     button.disabled = false;
+  }
+}
+
+// Pulls the new version, and — when the extension's own files changed — reloads the extension
+// (this popup closes). The server restarts itself first if its code changed.
+async function updateApp() {
+  const button = els.btnAppUpdate;
+  button.disabled = true;
+  els.appUpdateStatus.textContent = "Updating… this can take a minute";
+  try {
+    const result = await fetchJson("/api/app/update", { method: "POST" });
+    if (!result.updated) {
+      els.appUpdateStatus.textContent = "Already up to date";
+    } else if (result.extensionChanged) {
+      els.appUpdateStatus.textContent = "Updated — reloading the extension…";
+      setTimeout(() => chrome.runtime.reload(), result.restarting ? 3500 : 1200);
+    } else {
+      els.appUpdateStatus.textContent = "Updated";
+    }
+    if (result.restarting) setTimeout(checkServer, 3500);
+    button.classList.add("hidden");
+    showUpdateDot(false);
+    chrome.storage.local.set({ [UPDATE_CHECK_KEY]: { at: Date.now(), available: false } });
+  } catch (err) {
+    els.appUpdateStatus.textContent = `Update failed: ${err.message.split("\n").pop().slice(0, 90)}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Called when the popup opens: shows the dot from the last check and, when auto-check is on
+// and the last check is old, looks again in the background.
+async function startupUpdateCheck() {
+  const settings = await getSettings();
+  const { [UPDATE_CHECK_KEY]: last } = await chrome.storage.local.get(UPDATE_CHECK_KEY);
+  showUpdateDot(settings.autoUpdateCheck && !!last?.available);
+  if (settings.autoUpdateCheck && (!last || Date.now() - last.at > UPDATE_CHECK_EVERY_MS)) refreshUpdates({ force: true });
+}
+
+// Opening Settings shows the current versions; with auto-check off nothing goes to the network.
+async function onSettingsOpened() {
+  const settings = await getSettings();
+  refreshUpdates({ check: settings.autoUpdateCheck });
+}
+
+// --- Tips: a small "i" after an option's name reveals a one-or-two-sentence explanation ---
+
+function initTips() {
+  for (const row of els.panelSettings.querySelectorAll("[data-tip]")) {
+    const tip = document.createElement("p");
+    tip.className = "meta tip hidden";
+    tip.textContent = row.dataset.tip;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "info-btn";
+    button.textContent = "i";
+    button.title = "What is this?";
+    button.setAttribute("aria-label", `What is this? ${row.dataset.tip}`);
+    button.setAttribute("aria-expanded", "false");
+    button.addEventListener("click", (event) => {
+      event.preventDefault(); // inside a <label>: don't flip the switch
+      event.stopPropagation();
+      const open = tip.classList.toggle("hidden") === false;
+      button.classList.toggle("open", open);
+      button.setAttribute("aria-expanded", String(open));
+    });
+    row.firstElementChild.appendChild(button);
+    row.after(tip);
   }
 }
 
@@ -238,6 +358,7 @@ async function initSettingsTab() {
   els.settingAnalyzeFile.checked = settings.analyze.file;
   els.settingDeleteOriginal.checked = settings.deleteOriginal;
   els.settingCloseTunebat.checked = settings.closeTunebatTab;
+  els.settingAutoUpdate.checked = settings.autoUpdateCheck;
   buildFormatChips(settings.formats);
   buildTabsList(settings);
   buildStartTabSelect(settings);
@@ -260,6 +381,7 @@ async function initSettingsTab() {
     [els.settingAnalyzeFile, SETTING_KEYS.analyzeFile, "change", checkbox(els.settingAnalyzeFile)],
     [els.settingDeleteOriginal, SETTING_KEYS.deleteOriginal, "change", checkbox(els.settingDeleteOriginal)],
     [els.settingCloseTunebat, SETTING_KEYS.closeTunebatTab, "change", checkbox(els.settingCloseTunebat)],
+    [els.settingAutoUpdate, SETTING_KEYS.autoUpdateCheck, "change", checkbox(els.settingAutoUpdate)],
   ];
   for (const [el, key, eventName, read] of bindings) {
     el.addEventListener(eventName, () => chrome.storage.local.set({ [key]: read() }));
@@ -270,9 +392,12 @@ async function initSettingsTab() {
   els.appVersion.textContent = chrome.runtime.getManifest?.().version || els.appVersion.textContent;
   els.settingsBtnRecheck.addEventListener("click", () => {
     checkServer();
-    refreshYtdlpStatus(true);
+    refreshUpdates({ force: true });
   });
+  els.btnCheckUpdates.addEventListener("click", () => refreshUpdates({ force: true }));
   els.btnYtdlpUpdate.addEventListener("click", updateYtdlp);
+  els.btnAppUpdate.addEventListener("click", updateApp);
+  initTips();
   els.settingsBtnClearCache.addEventListener("click", handleClearCache);
   els.settingsBtnReset.addEventListener("click", handleResetSettings);
 }

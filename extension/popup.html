@@ -159,19 +159,19 @@
       <div id="panel-settings" class="hidden">
         <section class="settings-section">
           <h2 class="settings-title">Volume normalization</h2>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="Evens out the loudness of tracks downloaded from links, so they all play at a similar volume. Turn off to keep the original level.">
             <span>Link downloads</span>
             <span class="switch"><input type="checkbox" id="setting-normalize-link" /><span class="switch-track"></span></span>
           </label>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="Same for recordings made in the Sample tab.">
             <span>Sample recordings</span>
             <span class="switch"><input type="checkbox" id="setting-normalize-sample" /><span class="switch-track"></span></span>
           </label>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="Same for files converted in the File tab. Off by default, so your own masters keep their exact level.">
             <span>File conversions</span>
             <span class="switch"><input type="checkbox" id="setting-normalize-file" /><span class="switch-track"></span></span>
           </label>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="How loud normalized files end up. -16 suits most uses, -14 is louder, -18 leaves more headroom.">
             <span>Target loudness</span>
             <select id="setting-target-lufs" class="settings-input">
               <option value="-14">-14 LUFS · loud</option>
@@ -179,7 +179,6 @@
               <option value="-18">-18 LUFS · quiet</option>
             </select>
           </div>
-          <p class="meta">Brings each category to the same perceived volume. Turn a category off to keep its original level.</p>
         </section>
 
         <section class="settings-section">
@@ -188,19 +187,19 @@
           <div id="name-used" class="block-row" data-list="used"></div>
           <p class="meta name-help">Available</p>
           <div id="name-available" class="block-row" data-list="available"></div>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="The text placed between the blocks, for example “ - ” gives Beat name - 140bpm - Am.">
             <span>Separator</span>
             <select id="setting-name-separator" class="settings-input"></select>
           </div>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="How the tempo is written in the file name: 140bpm, 140 BPM or just 140.">
             <span>BPM as</span>
             <select id="setting-bpm-style" class="settings-input"></select>
           </div>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="How the key is written in the file name: Am or A minor.">
             <span>Key as</span>
             <select id="setting-key-style" class="settings-input"></select>
           </div>
-          <div id="name-custom-row" class="settings-row hidden">
+          <div id="name-custom-row" class="settings-row hidden" data-tip="A fixed word added to every file name, like FREE or your tag. It appears where you place the Custom text block.">
             <span>Custom text</span>
             <input id="setting-name-custom" type="text" class="settings-input" placeholder="e.g. FREE" spellcheck="false" />
           </div>
@@ -211,27 +210,26 @@
 
         <section class="settings-section">
           <h2 class="settings-title">BPM &amp; key (Tunebat)</h2>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="After a download, the file goes to Tunebat in a background tab to find its BPM and key. The tab you are on isn't touched.">
             <span>Link downloads</span>
             <span class="switch"><input type="checkbox" id="setting-analyze-link" /><span class="switch-track"></span></span>
           </label>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="The same for recordings exported from the Sample tab.">
             <span>Sample recordings</span>
             <span class="switch"><input type="checkbox" id="setting-analyze-sample" /><span class="switch-track"></span></span>
           </label>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="A file is analyzed the moment you add it, so its converted copy already has the BPM and key in its name.">
             <span>Files, when added</span>
             <span class="switch"><input type="checkbox" id="setting-analyze-file" /><span class="switch-track"></span></span>
           </label>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="The file is saved again with BPM and key in its name, and the first copy is removed once that finishes. Not used when “Ask where to save” is on.">
             <span>Delete the first copy</span>
             <span class="switch"><input type="checkbox" id="setting-delete-original" /><span class="switch-track"></span></span>
           </label>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="Closes the background Tunebat tab a few seconds after the last analysis. Turn off to keep it open for faster next ones.">
             <span>Close the Tunebat tab when done</span>
             <span class="switch"><input type="checkbox" id="setting-close-tunebat" /><span class="switch-track"></span></span>
           </label>
-          <p class="meta">Sent to Tunebat in a background tab — yours stays as it is. BPM and key go into the file name and tags: the file is saved again under its final name and the first copy is deleted once that finishes (not when “Ask where to save” is on). A file added in the File tab is analyzed right away, so its converted copy is named with them at once.</p>
         </section>
 
         <section class="settings-section">
@@ -242,19 +240,18 @@
 
         <section class="settings-section">
           <h2 class="settings-title">Downloads</h2>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="Shows Chrome's save dialog for every file instead of saving straight to your downloads folder. Files then aren't re-saved with BPM and key.">
             <span>Ask where to save each file</span>
             <span class="switch"><input type="checkbox" id="setting-save-as" /><span class="switch-track"></span></span>
           </label>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="A folder inside your Chrome downloads folder where files are put, like Instrumentals. Leave empty to use the downloads folder itself.">
             <span>Subfolder</span>
             <input id="setting-subfolder" type="text" class="settings-input" placeholder="e.g. Instrumentals" spellcheck="false" />
           </div>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="Writes the title, artist, source link and the video's picture into the audio file. Applies to Link downloads.">
             <span>Tags &amp; cover art</span>
             <span class="switch"><input type="checkbox" id="setting-tags" /><span class="switch-track"></span></span>
           </label>
-          <p class="meta">Files go to your Chrome downloads folder, inside the subfolder if set. Tags (title, artist, source link) and the video's picture as cover art are added to Link downloads.</p>
         </section>
 
         <section class="settings-section">
@@ -265,11 +262,11 @@
 
         <section class="settings-section">
           <h2 class="settings-title">General</h2>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="Which tab shows when you open the extension. “Last used tab” brings you back to where you left off.">
             <span>Open on</span>
             <select id="setting-start-tab" class="settings-input"></select>
           </div>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="How many queued links download at the same time. Lower is gentler on a slow computer.">
             <span>Queue: downloads at once</span>
             <select id="setting-queue-concurrency" class="settings-input">
               <option value="1">1 (gentlest)</option>
@@ -277,21 +274,19 @@
               <option value="3">3 (fastest)</option>
             </select>
           </div>
-          <label class="settings-row">
+          <label class="settings-row" data-tip="Starts converting as soon as you open a link, so the file is ready when you click. Turn off to save battery.">
             <span>Prepare MP3 &amp; WAV in advance</span>
             <span class="switch"><input type="checkbox" id="setting-prefetch" /><span class="switch-track"></span></span>
           </label>
-          <p class="meta">Starts downloading and converting as soon as you open a link, so the file is ready when you click. Turn off to save battery.</p>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="Starts and stops recording the current tab from anywhere, without opening the popup. Change opens Chrome's shortcut page.">
             <span>Record shortcut <kbd id="recording-shortcut">…</kbd></span>
             <button id="btn-shortcuts" class="icon-btn neutral text-btn" title="Change in Chrome's shortcut settings">Change</button>
           </div>
-          <p class="meta">Starts/stops recording the current tab from anywhere, without opening the popup. The icon shows REC while recording and a ✓ when the recording is ready.</p>
         </section>
 
         <section class="settings-section">
           <h2 class="settings-title">Local server</h2>
-          <div class="settings-row">
+          <div class="settings-row" data-tip="The small program on this computer that downloads and converts. It starts by itself when you log in; press the arrows to check it again.">
             <span class="server-status">
               <span id="settings-server-dot" class="dot"></span>
               <span id="settings-server-text">Checking…</span>
@@ -304,16 +299,26 @@
               </svg>
             </button>
           </div>
-          <p class="meta">A small program on this computer (127.0.0.1:5177) does the downloading and converting with yt-dlp and ffmpeg. It starts automatically when you log in. If it says not connected, start it with <code>npm start</code> in the server folder.</p>
+          <p class="meta">Runs at 127.0.0.1:5177. If it says not connected, start it with <code>npm start</code> in the server folder.</p>
         </section>
 
         <section class="settings-section">
-          <h2 class="settings-title">yt-dlp</h2>
-          <div class="settings-row">
-            <span id="ytdlp-status">Checking…</span>
+          <h2 class="settings-title">Updates</h2>
+          <label class="settings-row" data-tip="Looks for new versions of this tool and of yt-dlp when you open the extension (at most every 6 hours). A blue dot on the gear tells you when one is ready.">
+            <span>Check automatically</span>
+            <span class="switch"><input type="checkbox" id="setting-auto-update" /><span class="switch-track"></span></span>
+          </label>
+          <div class="settings-row" data-tip="Updates the extension and the local server together from GitHub. The extension reloads itself afterwards.">
+            <span class="update-name">Downloader</span>
+            <button id="btn-app-update" class="icon-btn neutral text-btn hidden">Update</button>
+          </div>
+          <p id="app-update-status" class="meta update-status">Checking…</p>
+          <div class="settings-row" data-tip="The tool that fetches audio from YouTube and Instagram. When downloads suddenly start failing, updating it usually fixes it.">
+            <span class="update-name">yt-dlp</span>
             <button id="btn-ytdlp-update" class="icon-btn neutral text-btn hidden">Update</button>
           </div>
-          <p class="meta">The tool that fetches audio from YouTube and Instagram. When downloads suddenly start failing, updating it usually fixes it.</p>
+          <p id="ytdlp-status" class="meta update-status">Checking…</p>
+          <button id="btn-check-updates" class="secondary-btn">Check for updates now</button>
         </section>
 
         <section class="settings-section">

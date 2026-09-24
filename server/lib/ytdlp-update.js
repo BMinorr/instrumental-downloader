@@ -74,11 +74,13 @@ async function detectMethod() {
   return "self"; // standalone binary: `yt-dlp -U`
 }
 
-async function getStatus() {
-  const [version, latest, method] = await Promise.all([installedVersion(), latestVersion(), detectMethod()]);
+// `check: false` only reads the installed version (no network).
+async function getStatus({ check = true } = {}) {
+  const [version, latest, method] = await Promise.all([installedVersion(), check ? latestVersion() : null, detectMethod()]);
   return {
     version,
     latest,
+    checked: check && !!latest,
     updateAvailable: latest ? isNewer(latest, version) : false,
     method,
   };

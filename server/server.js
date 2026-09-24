@@ -8,6 +8,7 @@ const instagram = require("./lib/instagram");
 const { resolveSpotifyToYoutube } = require("./lib/spotify");
 const { convertToFormat, isSupportedFormat, outputIdFor, runFfmpeg } = require("./lib/ytdlp");
 const ytdlpUpdate = require("./lib/ytdlp-update");
+const appUpdate = require("./lib/app-update");
 
 // Picks the right platform module for a URL (YouTube, or a resolved-from-Spotify
 // YouTube URL, or Instagram Story/Reel/Post).
@@ -48,7 +49,7 @@ app.get("/health", (req, res) => {
 // yt-dlp version / update (Settings > yt-dlp).
 app.get("/api/ytdlp", async (req, res) => {
   try {
-    res.json(await ytdlpUpdate.getStatus());
+    res.json(await ytdlpUpdate.getStatus({ check: req.query.check !== "0" }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -57,6 +58,25 @@ app.get("/api/ytdlp", async (req, res) => {
 app.post("/api/ytdlp/update", async (req, res) => {
   try {
     res.json(await ytdlpUpdate.update());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// This tool's own version / update from Git (Settings > Updates). `?check=0` = installed version only.
+app.get("/api/app", async (req, res) => {
+  try {
+    res.json(await appUpdate.getStatus({ check: req.query.check !== "0" }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/app/update", async (req, res) => {
+  try {
+    const result = await appUpdate.update();
+    res.json(result);
+    if (result.restarting) res.on("finish", () => appUpdate.restart());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
