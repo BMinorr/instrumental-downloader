@@ -7,6 +7,7 @@ const youtube = require("./lib/youtube");
 const instagram = require("./lib/instagram");
 const { resolveSpotifyToYoutube } = require("./lib/spotify");
 const { convertToFormat, isSupportedFormat, outputIdFor } = require("./lib/ytdlp");
+const ytdlpUpdate = require("./lib/ytdlp-update");
 
 // Picks the right platform module for a URL (YouTube, or a resolved-from-Spotify
 // YouTube URL, or Instagram Story/Reel/Post).
@@ -24,11 +25,41 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
 }
 
 const app = express();
-app.use(cors());
+
+// Only the extension may use this server. Browsers attach an Origin header to every
+// cross-site request, so any website trying to trigger downloads or a yt-dlp update via
+// fetch/form is refused here — CORS alone wouldn't stop a "simple" POST from running.
+// (ALLOWED_ORIGINS="http://host:port,…" adds extra origins, for local testing only.)
+const EXTRA_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "").split(",").filter(Boolean));
+function isAllowedOrigin(origin) {
+  return !origin || origin.startsWith("chrome-extension://") || EXTRA_ORIGINS.has(origin);
+}
+app.use((req, res, next) => {
+  if (isAllowedOrigin(req.headers.origin)) return next();
+  res.status(403).json({ error: "Origin not allowed." });
+});
+app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }));
 app.use(express.json({ limit: "5mb" }));
 
 app.get("/health", (req, res) => {
   res.json({ ok: true });
+});
+
+// yt-dlp version / update (Settings > yt-dlp).
+app.get("/api/ytdlp", async (req, res) => {
+  try {
+    res.json(await ytdlpUpdate.getStatus());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/ytdlp/update", async (req, res) => {
+  try {
+    res.json(await ytdlpUpdate.update());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/api/analyze", async (req, res) => {

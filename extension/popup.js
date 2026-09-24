@@ -47,6 +47,8 @@ const els = {
   formatChips: document.getElementById("format-chips"),
   recordingShortcut: document.getElementById("recording-shortcut"),
   btnShortcuts: document.getElementById("btn-shortcuts"),
+  ytdlpStatus: document.getElementById("ytdlp-status"),
+  btnYtdlpUpdate: document.getElementById("btn-ytdlp-update"),
   appVersion: document.getElementById("app-version"),
   settingsServerText: document.getElementById("settings-server-text"),
   settingsBtnRecheck: document.getElementById("settings-btn-recheck"),
@@ -267,7 +269,7 @@ async function handleDirect(url) {
     renderTrack(url, data);
     if (currentCacheKey) setCachedBundle(currentCacheKey, { ...data, mediaUrl: url });
   } catch (err) {
-    els.statusMessage.textContent = `Error: ${err.message}`;
+    els.statusMessage.textContent = `Error: ${withYtdlpHint(err.message)}`;
     els.statusMessage.classList.remove("hidden");
     els.trackInfo.classList.add("hidden");
     els.formatOptions.classList.add("hidden");
@@ -289,7 +291,7 @@ async function handleSpotify(spotifyUrl) {
     renderTrack(data.youtube.url, data.youtube);
     if (currentCacheKey) setCachedBundle(currentCacheKey, { ...data.youtube, mediaUrl: data.youtube.url });
   } catch (err) {
-    els.statusMessage.textContent = `Error: ${err.message}`;
+    els.statusMessage.textContent = `Error: ${withYtdlpHint(err.message)}`;
     els.statusMessage.classList.remove("hidden");
     els.trackInfo.classList.add("hidden");
     els.formatOptions.classList.add("hidden");
@@ -378,7 +380,7 @@ async function handleDownload(format) {
     els.progress.textContent = "Download started — check Chrome's downloads bar.";
     trackDownloadCompletion(downloadId, fileUrl, filename, els.btnTunebat, currentCacheKey);
   } catch (err) {
-    els.progress.textContent = `Error: ${err.message}`;
+    els.progress.textContent = `Error: ${withYtdlpHint(err.message)}`;
   } finally {
     linkGrid.setBusy(null);
   }
@@ -476,6 +478,7 @@ function switchTab(which) {
     panels[name].classList.toggle("hidden", !isActive);
   }
   chrome.storage.local.set({ activeTab: which });
+  if (which === "settings") refreshYtdlpStatus();
 }
 
 // --- File tab: pick/drop a local audio file, then convert it or analyze it on Tunebat ---
@@ -1239,6 +1242,62 @@ function buildFormatChips(selected) {
   }
 }
 
+// --- yt-dlp version / update (Settings) ---
+
+let ytdlpChecked = false;
+
+async function refreshYtdlpStatus(force = false) {
+  if (ytdlpChecked && !force) return;
+  ytdlpChecked = true;
+  els.btnYtdlpUpdate.classList.add("hidden");
+  els.ytdlpStatus.textContent = "Checking…";
+  try {
+    const res = await fetch(`${SERVER}/api/ytdlp`);
+    const info = await res.json();
+    if (!res.ok) throw new Error(info.error || "Unknown error.");
+    showYtdlpStatus(info);
+  } catch (err) {
+    ytdlpChecked = false; // try again next time Settings opens
+    els.ytdlpStatus.textContent = err instanceof TypeError ? "Server not connected" : `Error: ${err.message}`;
+  }
+}
+
+function showYtdlpStatus(info) {
+  const version = `v${info.version}`;
+  if (info.updateAvailable) {
+    els.ytdlpStatus.textContent = `${version} · update available (${info.latest})`;
+  } else if (info.latest) {
+    els.ytdlpStatus.textContent = `${version} · up to date`;
+  } else {
+    els.ytdlpStatus.textContent = `${version} · couldn't check for updates`;
+  }
+  // Offer the update when there is one — or when we couldn't tell (offline check).
+  els.btnYtdlpUpdate.classList.toggle("hidden", !info.updateAvailable && !!info.latest);
+}
+
+async function updateYtdlp() {
+  const button = els.btnYtdlpUpdate;
+  button.disabled = true;
+  els.ytdlpStatus.textContent = "Updating… this can take a minute";
+  try {
+    const res = await fetch(`${SERVER}/api/ytdlp/update`, { method: "POST" });
+    const info = await res.json();
+    if (!res.ok) throw new Error(info.error || "Unknown error.");
+    showYtdlpStatus(info);
+  } catch (err) {
+    els.ytdlpStatus.textContent = `Update failed: ${err.message.split("\n").pop().slice(0, 90)}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// A hint for errors that usually mean yt-dlp is out of date.
+function withYtdlpHint(message) {
+  return /ERROR:|yt-dlp|unable to extract|sign in|HTTP Error 4/i.test(message)
+    ? `${message} — if this keeps happening, update yt-dlp in Settings.`
+    : message;
+}
+
 // Shows the key currently bound to "toggle recording" (users can change it in Chrome).
 async function showRecordingShortcut() {
   try {
@@ -1282,7 +1341,11 @@ async function initSettingsTab() {
   showRecordingShortcut();
   els.btnShortcuts.addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
   els.appVersion.textContent = chrome.runtime.getManifest?.().version || els.appVersion.textContent;
-  els.settingsBtnRecheck.addEventListener("click", checkServer);
+  els.settingsBtnRecheck.addEventListener("click", () => {
+    checkServer();
+    refreshYtdlpStatus(true);
+  });
+  els.btnYtdlpUpdate.addEventListener("click", updateYtdlp);
   els.settingsBtnClearCache.addEventListener("click", handleClearCache);
 }
 
