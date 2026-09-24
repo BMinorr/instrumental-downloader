@@ -32,7 +32,7 @@ Proiect al unui proprietar de studio de muzică: extensie Chrome + server local 
 - **Trim** pe waveform: `-ss`/`-to` puse **după** `-i` (folosesc timeline-ul absolut al sursei — verificat empiric).
 - **Setări** (`chrome.storage.local`, prefix `settings.`, sunt păstrate de „Clear cached data"): `normalize.link|sample|file` (link/sample implicit ON, file implicit OFF; cheia veche `settings.loudnorm` e citită doar ca fallback pentru link/sample), `targetLufs` (-14/-16/-18), `saveAs`, `subfolder`, `startTab`, `prefetch`. Toate se citesc prin `getSettings()`; downloadurile trec prin `startDownload()` (subfolder + saveAs + anulare). Serverul primește `{loudnorm, targetLufs}` (+ `prefetch` la analyze); numele fișierului din cache poartă sufixul: `-raw` (fără normalizare), `-l14`/`-l18` (alte ținte), niciunul pentru -16.
 - **Loudness**: vezi „Viteza". Sursa brută e partajată între variantele de procesare.
-- **Status server**: bulina NU mai e în header — e în Settings > Local server (`checkServer()` actualizează punctul și textul de acolo). Tab-ul Settings stă în dreapta header-ului (rotița).
+- **Status server**: bulina NU mai e în header — e în Settings > Local server (`checkServer()` actualizează punctul și textul de acolo, plus un punct roșu pe rotiță — clasa `.alert` — cât timp serverul nu răspunde). Tab-ul Settings stă în dreapta header-ului (rotița).
 - **Bug învățat**: un `File` fără MIME (`type === ""`) trimis cu `fetch` nu are `Content-Type` și `express.raw({type:"*/*"})` îl ignora (body gol). Rutele raw acceptă acum orice (`type: () => true`) și popup-ul trimite explicit `application/octet-stream`.
 - Fișierele din `server/downloads/` se șterg automat după 1 oră.
 

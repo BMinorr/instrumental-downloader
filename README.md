@@ -250,7 +250,7 @@ Rotița din colțul dreapta sus. Setările se salvează automat și se păstreaz
 - *Open on* — ultimul tab folosit (implicit) sau mereu File / Link / Sample
 - *Prepare MP3 & WAV in advance* — pregătirea în fundal descrisă la „Viteza descărcării"; dezactiv-o ca să economisești baterie
 
-**Local server** — aici stă acum indicatorul de status (înainte era bulina din header): punct verde/roșu + „Connected" / „Not connected", buton de reverificare și o explicație scurtă despre ce face serverul local.
+**Local server** — aici stă acum indicatorul de status (înainte era bulina din header): punct verde/roșu + „Connected" / „Not connected" (cât timp serverul nu răspunde, rotița are și un punct roșu, vizibil din orice tab), buton de reverificare și o explicație scurtă despre ce face serverul local.
 
 **Data** — *Clear cached data* șterge datele reținute de extensie (piese cache-uite, tab-ul activ, descărcări în așteptare); nu atinge setările și nici fișierele deja salvate.
 

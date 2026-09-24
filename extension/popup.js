@@ -139,7 +139,8 @@ function formatDuration(seconds) {
   return `${m}:${s}`;
 }
 
-// Checks the local server and shows the result in Settings > Local server (dot + text).
+// Checks the local server and shows the result in Settings > Local server (dot + text),
+// plus a red dot on the Settings gear while it's unreachable so it's visible from any tab.
 async function checkServer() {
   els.serverDot.className = "dot";
   els.settingsServerText.textContent = "Checking…";
@@ -148,12 +149,21 @@ async function checkServer() {
     if (!res.ok) throw new Error();
     els.serverDot.classList.add("ok");
     els.settingsServerText.textContent = "Connected";
+    setServerAlert(false);
     return true;
   } catch {
     els.serverDot.classList.add("err");
     els.settingsServerText.textContent = "Not connected";
+    setServerAlert(true);
     return false;
   }
+}
+
+function setServerAlert(down) {
+  els.tabSettings.classList.toggle("alert", down);
+  const label = down ? "Settings — server not connected" : "Settings";
+  els.tabSettings.title = label;
+  els.tabSettings.setAttribute("aria-label", label);
 }
 
 async function main() {

@@ -77,6 +77,23 @@ header {
   justify-content: center;
 }
 
+/* Red dot on the Settings gear while the local server is unreachable. */
+.icon-tab-btn {
+  position: relative;
+}
+
+.icon-tab-btn.alert::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--err);
+  box-shadow: 0 0 0 2px var(--bg); /* ring so the dot reads on top of the icon */
+}
+
 .icon-tab-btn:hover {
   color: var(--text);
 }
