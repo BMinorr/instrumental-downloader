@@ -7,7 +7,7 @@ Extensie Chrome + server local pentru descărcarea instrumentalelor pe care ți 
 **Faza 3 (gata):** Instagram — Story, Reel și Post, cu autentificare din Chrome (vezi mai jos).
 **Faza 4 (gata):** tab „Sample" — înregistrează audio-ul care redă din tab-ul curent (ex. un beat pe care clientul ți-l cântă live într-un apel video), apoi descarcă-l ca MP3 320kbps sau WAV.
 
-Extensia are tab-urile **File** (alegi/tragi un fișier audio local, îl convertești sau îl trimiți în Tunebat), **Link** (YouTube/Spotify/Instagram — tab-ul implicit; poți și lipi un link), **Sample** (înregistrare directă din tab), **Queue** (mai multe link-uri sau un playlist, în fundal), plus **History** (ceasul) și **Settings** (rotița). Detecția de BPM/Key nu mai e integrată în extensie (rezultate inconsistente) — în schimb, după ce o piesă e efectiv descărcată, apare un buton **„Analyze BPM & Key on Tunebat"** care deschide [tunebat.com/Analyzer](https://tunebat.com/Analyzer) într-un tab nou cu **fișierul deja inserat automat** acolo.
+Extensia are tab-urile **File** (alegi/tragi un fișier audio local și îl convertești), **Link** (YouTube/Spotify/Instagram — tab-ul implicit; lipești un link, mai multe sau un playlist), **Sample** (înregistrare directă din tab) și **History**, plus **Settings** (rotița). Tab-urile se pot ascunde și reordona din Settings. După fiecare descărcare, BPM-ul și cheia se iau **automat** de pe Tunebat (într-un tab în fundal) și ajung în numele fișierului.
 
 ## De ce ai nevoie de un server local
 
@@ -114,20 +114,22 @@ npm start
 
 ## 4. Utilizare
 
-1. Deschide un videoclip YouTube (instrumentalul trimis de client)
-2. Click pe iconița extensiei
-3. Alege **MP3** sau **WAV** — fișierul apare în Downloads-urile Chrome
-4. După ce descărcarea chiar se termină (nu doar la click), apare butonul **„Analyze BPM & Key on Tunebat"** — click pe el deschide Tunebat într-un tab nou cu piesa deja încărcată acolo, gata de analiză
+1. Deschide un videoclip YouTube (instrumentalul trimis de client) — sau copiază link-ul și lipește-l în extensie
+2. Click pe iconița extensiei, apoi pe un format (MP3, WAV, FLAC…)
+3. Fișierul apare imediat în Downloads-urile Chrome. În câteva secunde, în fundal, BPM-ul și cheia sunt citite de pe Tunebat, iar fișierul e salvat din nou cu numele final (`Beat - 140bpm - Am - Producer.mp3`), iar prima copie se șterge
 
 (Serverul rulează deja automat în fundal — vezi pasul 2 de mai sus.)
 
-## Cum funcționează inserarea automată în Tunebat
+## Analiza automată pe Tunebat (BPM și cheie)
 
-Tunebat analizează fișierele **local, în browser** (nu le trimite pe niciun server — au confirmat asta explicit pe pagina lor). Extensia profită de asta: după ce descarci o piesă, ia bytes-ii fișierului deja descărcat (din cache-ul local al serverului) și îi „livrează" direct în input-ul de upload al Tunebat, exact cum ar face selecția manuală a fișierului — Tunebat pornește analiza automat de-acolo.
+Tunebat analizează fișierele **local, în browser** (nu le trimite pe niciun server). După fiecare descărcare, extensia (service worker-ul din fundal) face asta pentru tine:
 
-Tunebat e o aplicație randată complet în browser (HTML-ul lui nu conține widget-ul de upload), așa că extensia nu așteaptă încărcarea completă a paginii (reclame, analytics) și nici o pauză fixă: verifică la fiecare 100 ms până când input-ul de upload există și React l-a inițializat, apoi inserează fișierul imediat — de obicei în mai puțin de o jumătate de secundă, față de ~2 s înainte. Dacă inserarea eșuează, un mesaj apare direct pe pagina Tunebat.
+1. deschide **Tunebat într-un tab în fundal** (tab-ul tău rămâne cel activ) și îi „dă" fișierul — exact ca o selecție manuală, cu `File`-ul creat în contextul paginii ca React-ul lor să nu-l respingă. Nu așteaptă încărcarea completă a paginii (reclame): verifică la 100 ms până când widget-ul de upload există și e gata
+2. citește rândul de rezultat (BPM, cheie, cod Camelot) — îl găsește după conținut, nu după clase CSS (sunt hash-uite și se schimbă)
+3. salvează fișierul din nou sub **numele final**, cu BPM și cheie și în tag-uri (MP3/FLAC: `TBPM`/`TKEY`, `BPM`/`INITIALKEY`), apoi **șterge prima copie** — dar doar după ce copia nouă s-a terminat de salvat; dacă orice pas eșuează, prima copie rămâne neatinsă
+4. scrie rezultatul în History (și în coadă) — extensia îl arată sub butoanele de format: `140 BPM · A minor · 8A`
 
-Asta rulează dintr-un **service worker** al extensiei (`background.js`), ca să funcționeze chiar dacă închizi popup-ul înainte să se termine descărcarea — starea „descărcat" se salvează, iar butonul Tunebat apare oricând redeschizi popup-ul pe aceeași piesă.
+Mai multe fișiere la rând (o coadă, un playlist) folosesc **același tab Tunebat** — pagina se încarcă o singură dată — care se închide după câteva secunde de inactivitate. AIFF și Opus nu sunt acceptate de Tunebat: pentru ele se analizează o copie WAV făcută pe loc (nu se salvează nicăieri). Se poate opri, sau se poate lăsa tab-ul deschis / prima copie nesștearsă, din Settings → „BPM & key (Tunebat)". Cu „Ask where to save each file" pornit, analiza rulează dar fișierul nu se mai salvează a doua oară (nu vrem un al doilea dialog).
 
 ## Viteza descărcării
 
@@ -203,7 +205,7 @@ Pentru cazurile în care clientul nu-ți trimite un link, ci îți cântă/redă
 3. Audio-ul continuă să se audă normal (nu se oprește cât înregistrezi) — extensia doar „ascultă" în paralel; un indicator de nivel arată în timp real că se captează sunet
 4. Click din nou ca să oprești — apare un waveform + player cu ce ai înregistrat, un câmp editabil pentru numele fișierului, plus **MP3**/**WAV** ca să descarci
 5. (Opțional) Trage marginile waveform-ului ca să tai liniște/greșeli de la început sau sfârșit — dublu-click resetează la piesa întreagă. Redarea rămâne în intervalul selectat, ca să auzi exact ce descarci
-6. La fel ca pe tab-ul Link, după ce descărcarea chiar se termină apare butonul **„Analyze BPM & Key on Tunebat"**
+6. La fel ca pe tab-ul Link, după export începe analiza automată pe Tunebat (BPM și cheie în numele fișierului)
 
 **Înregistrarea continuă chiar dacă închizi popup-ul** (ex. dai rec, închizi popup-ul, navighezi în alt tab, revii mai târziu și apeși stop) — rulează într-un „offscreen document" separat de popup, exact ca să nu fii nevoit să stai cu extensia deschisă cât timp se înregistrează un instrumental întreg. Bytes-ii înregistrării rămân în memoria acelui document (nu în `chrome.storage`, care are o limită de 10MB — o sesiune de câteva minute ar depăși-o ușor) — popup-ul îi cere înapoi doar când chiar are nevoie de ei (redare sau descărcare).
 
@@ -224,33 +226,28 @@ Toate cele trei tab-uri au aceeași grilă de butoane, un click = un fișier:
 
 Doar butonul apăsat afișează spinner cât se convertește; restul se estompează. **WAV, FLAC și AIFF păstrează 24-bit** dacă sursa e 24-bit (ex. un WAV 24-bit primit de la client); sursele lossy (YouTube, MP3, AAC, Opus) ies pe 16-bit, fiindcă 24-bit acolo n-ar aduce nimic. Frecvența de eșantionare se păstrează (MP3 și Opus se aduc automat la o frecvență suportată, ex. 96 kHz → 48 kHz). Pregătirea în fundal (vezi „Viteza descărcării") face din start MP3 și WAV; celelalte formate se convertesc la click din sursa deja descărcată, de obicei în 1-3 s.
 
-## Tab-ul File (conversie + Tunebat)
+## Tab-ul File (conversie)
 
 Pentru un fișier pe care îl ai deja pe disc (trimis de client pe WhatsApp/mail/Drive):
 
 1. Deschide extensia → tab-ul **File**
 2. Trage fișierul în zonă (drag & drop) **sau** click în zonă și alege-l din file explorer — MP3, WAV, FLAC, AIFF, M4A, AAC, OGG sau OPUS, maxim 100 MB
-3. Apar grila de formate și butonul **„Analyze BPM & Key on Tunebat"** (ambele doar după ce ai ales un fișier)
-4. **Conversie**: click pe un format → fișierul se descarcă cu numele original și extensia nouă (ex. `Beat.wav` → `Beat.flac`). Fișierul se urcă pe serverul local o singură dată, deci mai multe formate la rând nu îl retrimit
-5. **Tunebat**: se deschide cu fișierul deja inserat. Tunebat nu acceptă AIFF/OPUS, așa că acestea se convertesc automat întâi în WAV (fără normalizare de volum)
+3. Click pe un format → fișierul se descarcă cu numele bazat pe blocurile din Settings (implicit numele original + BPM și cheie după analiză). Fișierul se urcă pe serverul local o singură dată, deci mai multe formate la rând nu îl retrimit
 
-Copia de pe server (`/api/stash`, `/api/convert-stash`) se șterge automat după 1 oră. Conversiile din File **nu** normalizează volumul implicit (fișierul păstrează exact nivelul original); comutatorul „File conversions" din Settings îl activează.
+Copia de pe server (`/api/stash`, `/api/convert-stash`) se șterge automat după 1 oră. Conversiile din File **nu** normalizează volumul implicit; comutatorul „File conversions" din Settings îl activează.
 
-## Link: lipește un link
+## Tab-ul Link: un link, mai multe sau un playlist
 
-Câmpul de sus din tab-ul Link încarcă un link fără să deschizi pagina lui: copiezi link-ul primit de la client, deschizi extensia, lipești (Ctrl/Cmd+V) — se încarcă singur. Merge și cu text în jur (extrage link-ul), iar Enter pe câmp gol revine la pagina din tab-ul curent. Pe o pagină nesuportată câmpul are deja focus, deci lipirea e primul pas. Pentru YouTube, titlul și thumbnail-ul apar imediat din oEmbed.
+Câmpul de sus primește orice: copiezi link-ul primit de la client, deschizi extensia, lipești (Ctrl/Cmd+V) — se încarcă singur. Enter trimite, Shift+Enter adaugă o linie, iar Enter pe câmp gol revine la pagina din tab-ul curent. Pe o pagină nesuportată câmpul are deja focus.
 
-## Tab-ul Queue (mai multe link-uri / playlist)
+- **Un singur link** → previzualizare (titlul și thumbnail-ul apar imediat) și butoanele de format
+- **Mai multe link-uri** (unul pe rând) **sau un playlist YouTube** (`/playlist?list=…` sau un link de video cu `list=…`, până la 100 de piese) → apare „N tracks ready"; alegi formatul și tot lotul intră în **coadă**
 
-Lipești mai multe link-uri (unul pe rând) sau un **link de playlist YouTube** (`/playlist?list=…` sau un link de video cu `list=…`; până la 100 de piese), alegi formatul și „Add to queue". Coada rulează **în fundal** (service worker-ul extensiei), deci continuă cu popup-ul închis: câte o piesă pe rând, fiecare salvată cu numele și setările tale (subfolder, tag-uri, normalizare). Pe icon apare câte au mai rămas, apoi ✓ (sau ! dacă au fost erori). Dacă browserul oprește worker-ul la jumătate, piesa întreruptă reia singură. Spotify: doar piese individuale (nu playlist-uri/albume). Coada ignoră „Ask where to save" — un dialog pentru fiecare piesă ar strica rostul cozii.
+Coada apare sub butoane și rulează **în fundal** (service worker-ul extensiei), deci continuă cu popup-ul închis: câte **două piese odată** (extragerea yt-dlp e în mare parte așteptare pe rețea, deci se suprapun frumos), fiecare salvată cu numele și setările tale, apoi trimisă la analiza Tunebat. Pe icon apare câte au mai rămas, apoi ✓ (sau ! dacă au fost erori). Dacă browserul oprește worker-ul la jumătate, piesele întrerupte reiau singure. Spotify: doar piese individuale (nu playlist-uri/albume). Coada ignoră „Ask where to save".
 
 ## Tab-ul History
 
-Ultimele 30 de descărcări (Link, Sample, File), fiecare cu: **Show in folder**, **Analyze on Tunebat** (dacă fișierul de pe server a expirat, pentru Link se aduce din nou) și — pentru Link — **Download again in another format**. „Clear history" îl golește; „Clear cached data" din Settings îl păstrează.
-
-## BPM & Key în numele fișierului
-
-După ce trimiți o piesă în Tunebat, extensia **citește rezultatul** (BPM, cheie, cod Camelot) de pe pagina Tunebat și îl păstrează. Când redeschizi extensia, sub butonul Tunebat (Link/Sample) sau în History apare `140 BPM · A minor · 8A` și **„Rename with BPM & key"**: salvează o copie numită după șablonul din Settings (implicit `{title} - {bpm}bpm - {keyshort}` → `Beat - 140bpm - Am.mp3`). La **MP3 și FLAC** BPM-ul și cheia se scriu și în tag-uri (TBPM/TKEY, BPM/INITIALKEY — le văd DJ-softurile); la celelalte formate se schimbă doar numele. Chrome nu poate redenumi un fișier deja descărcat, deci rămâne originalul — opțiunea **„Delete original when renaming"** (implicit oprită) îl șterge după salvarea copiei. Citirea rezultatului depinde de structura paginii Tunebat; dacă își schimbă pagina, apare doar mesajul lipsă (nimic nu se strică).
+Ultimele 30 de descărcări (Link, Sample, File), fiecare cu rezultatul analizei (`90 BPM · F# minor · 11A`), **Show in folder**, **Analyze again** (dacă analiza a eșuat și copia de pe server încă există) și — pentru Link — **Download again in another format**. „Clear history" îl golește; „Clear cached data" din Settings îl păstrează.
 
 ## Tab-ul Sample: Trim silence și fade
 
@@ -258,9 +255,11 @@ Sub waveform: **Trim silence** mută mânerele pe primul și ultimul sunet (prag
 
 **Înregistrare fără popup:** scurtătura **Alt+Shift+R** (schimbabilă în Chrome → Extensions → Keyboard shortcuts, sau din Settings → Change) pornește/oprește înregistrarea tab-ului curent fără să deschizi extensia. Iconița arată **REC** cât înregistrează și **✓** când e gata; deschide popup-ul ca s-o preiei.
 
-## Nume de fișier, tag-uri și copertă
+## Nume de fișier: blocuri
 
-Settings → Downloads → **File name**: șablon cu `{title}` și `{uploader}` (ex. `{uploader} - {title}`; separatoarele rămase atârnate se curăță). **Tags & cover art** (implicit ON): descărcările Link primesc titlu, artist (uploader) și linkul sursă, plus imaginea videoclipului (tăiată pătrat, 600 px) drept copertă — în MP3, M4A, FLAC și AIFF; WAV primește doar tag-uri text, Opus doar tag-uri.
+Settings → **File names**: numele fișierelor se compun din **blocuri** pe care le tragi (drag & drop) în ordinea dorită: **Beat name** (titlul), **BPM**, **Key**, **Producer** (canalul/uploader-ul) — ordinea implicită — plus **Camelot**, **Date**, **Format** și **Custom text**. Tragi un bloc în „Available" (sau apeși ×) ca să-l scoți, apeși „+" ca să-l adaugi; alegi separatorul (` - `, `_`, spațiu, ` | `) și vezi imediat o previzualizare (`Midnight Drive - 140bpm - Am - Beatmaker.mp3`). Blocurile fără valoare se sar (BPM și cheia lipsesc până vine analiza; o înregistrare nu are producer), iar un producer care apare deja în titlu („Producer - Beat") nu se repetă.
+
+**Tags & cover art** (implicit ON): descărcările Link primesc titlu, artist (uploader) și linkul sursă, plus imaginea videoclipului (tăiată pătrat, 600 px) drept copertă — în MP3, M4A, FLAC și AIFF; WAV primește doar tag-uri text, Opus doar tag-uri.
 
 ## Actualizare yt-dlp din extensie
 
@@ -274,23 +273,15 @@ Serverul local răspunde doar extensiei: orice cerere cu un `Origin` care nu e `
 
 Rotița din colțul dreapta sus. Setările se salvează automat și se păstrează chiar dacă apeși „Clear cached data".
 
-**Volume normalization** — un comutator separat pentru fiecare categorie: *Link downloads* și *Sample recordings* (implicit pornite), *File conversions* (implicit oprit — o conversie de format nu ar trebui să schimbe volumul decât dacă îi ceri). **Target loudness**: -14 (tare), -16 (implicit) sau -18 LUFS (mai încet). Fișierele normalizate la ținte diferite se cache-uiesc separat.
+**Volume normalization** — un comutator separat pentru *Link downloads* și *Sample recordings* (implicit pornite) și *File conversions* (implicit oprit). **Target loudness**: -14, -16 (implicit) sau -18 LUFS.
 
-**Downloads**
-- *Ask where to save each file* — deschide dialogul „Save as" de fiecare dată
-- *Subfolder* — salvează în `Downloads/<subfolder>` (ex. `Instrumentals` sau `Clients/Ana`); caracterele nepermise și `..` sunt eliminate
-- *File name*, *Tags & cover art*, *BPM & key name*, *Delete original when renaming* — vezi secțiunile de mai sus
+**File names** — blocurile de mai sus. **BPM & key (Tunebat)** — *Analyze after each download*, *Delete the first copy*, *Close the Tunebat tab when done* (toate implicit ON).
 
-**Formats shown** — alegi ce formate apar în grile (minim unul)
+**Tabs** — tragi ca să reordonezi File / Link / Sample / History și comuți ca să ascunzi (măcar unul rămâne vizibil; Settings e mereu acolo). Un tab ascuns nu costă nimic — de pildă, cu Link ascuns extensia nu mai pornește analiza și pregătirea în fundal la fiecare deschidere.
 
-**General**
-- *Open on* — ultimul tab folosit (implicit) sau mereu File / Link / Sample
-- *Prepare MP3 & WAV in advance* — pregătirea în fundal descrisă la „Viteza descărcării"; dezactiv-o ca să economisești baterie
-- *Record shortcut* — tasta curentă pentru pornit/oprit înregistrarea (vezi Sample)
+**Downloads** — *Ask where to save each file*, *Subfolder* (`Downloads/<subfolder>`), *Tags & cover art*. **Formats shown** — ce formate apar în grile (minim unul). **General** — *Open on* (ultimul tab sau unul dintre cele vizibile), *Prepare MP3 & WAV in advance* (vezi „Viteza descărcării"), *Record shortcut*.
 
-**Local server** — aici stă acum indicatorul de status (înainte era bulina din header): punct verde/roșu + „Connected" / „Not connected" (cât timp serverul nu răspunde, rotița are și un punct roșu, vizibil din orice tab), buton de reverificare și o explicație scurtă despre ce face serverul local.
-
-**Data** — *Clear cached data* șterge datele reținute de extensie (piese cache-uite, tab-ul activ, descărcări în așteptare); nu atinge setările și nici fișierele deja salvate.
+**Local server** — indicatorul de status (punct + „Connected"/„Not connected", cu punct roșu pe rotiță cât e oprit), **yt-dlp** — versiunea + Update, **Data** — *Clear cached data* (uită paginile reținute și ultimul tab; **nu** atinge setările, istoricul, coada sau analizele în curs).
 
 În subsolul panoului: versiunea și „by B Minor" (link către [bminorr.github.io](https://bminorr.github.io/)).
 
@@ -334,9 +325,9 @@ instrumental-downloader/
 │   └── lib/ytdlp.js, lib/youtube.js, lib/instagram.js, lib/spotify.js
 ├── extension/            # Extensie Chrome (Manifest V3)
 │   ├── manifest.json
-│   ├── shared.js         # setări, nume de fișiere, istoric, helper de descărcare (popup + worker)
-│   ├── queue-engine.js   # coada de descărcări (rulează în worker)
-│   ├── history.js, queue.js, analysis.js   # partea de popup a tab-urilor History/Queue + card BPM/key
+│   ├── shared.js         # setări, blocurile de nume, istoric, helper de descărcare (popup + worker)
+│   ├── dom.js, popup.js, tab-*.js   # popup-ul: câte un fișier pe tab (link, file, sample, history, settings)
+│   ├── queue-engine.js, analysis-engine.js, tunebat.js   # worker-ul: coada, analiza automată Tunebat, paginile Tunebat
 │   ├── icons/             # icon-ul extensiei (16/32/48/128px)
 │   ├── popup.html/css/js  # tab-uri File + Link + Sample + Settings
 │   ├── background.js     # service worker: descărcări, Tunebat, coordonare Sample

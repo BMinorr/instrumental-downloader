@@ -6,6 +6,10 @@ let sampleTimerInterval = null;
 let sampleElapsedBaseMs = 0;
 let sampleElapsedStartedAt = 0;
 let lastSampleBlob = null;
+// The Tunebat analysis of the recording that was just exported.
+const sampleResultCard = createResultCard(els.sampleResultCard, (history) =>
+  lastSampleBlob ? history.find((e) => e.source === "sample" && Date.now() - e.ts < 15 * 60 * 1000) || null : null
+);
 
 function formatTimer(ms) {
   const totalSeconds = Math.floor(ms / 1000);
@@ -17,7 +21,6 @@ function formatTimer(ms) {
 async function initSampleTab() {
   els.sampleRecordBtn.addEventListener("click", handleRecordClick);
   els.sampleBtnDiscard.addEventListener("click", handleDiscardRecording);
-  els.sampleBtnTunebat.addEventListener("click", makeTunebatHandler(els.sampleBtnTunebat, els.sampleProgress));
   setupSamplePlayer();
   els.sampleBtnTrimSilence.addEventListener("click", trimSilence);
 
@@ -47,8 +50,6 @@ async function initSampleTab() {
     const last = await sendToBackground({ type: "sample:getLast" });
     if (last?.recording) {
       showSampleResult(last.recording.audioBase64, last.recording.durationMs);
-      const bundle = await getCachedBundle("__sample__");
-      updateTunebatButton(els.sampleBtnTunebat, bundle?.downloadedFile);
     }
   }
 }
@@ -414,19 +415,19 @@ async function handleSampleDownload(format) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
 
-    const safeName =
-      (els.sampleFilename.value || "sample").trim().replace(/[\\/:*?"<>|]/g, "_") || "sample";
-    const filename = `${safeName}.${format}`;
-    const fileUrl = `${SERVER}${data.downloadUrl}`;
+    // The name field is the "Beat name" block; the rest of the name follows the user's blocks.
+    const title = (els.sampleFilename.value || "sample").trim().replace(/[\\/:*?"<>|]/g, "_") || "sample";
+    const settings = await getSettings();
+    const filename = `${buildName(settings, { title, format })}.${format}`;
 
-    const downloadId = await startDownload(fileUrl, filename, { source: "sample", title: safeName, format });
-    if (downloadId === null) {
-      els.sampleProgress.textContent = "Save cancelled.";
-      return;
-    }
-
-    els.sampleProgress.textContent = "Download started — check Chrome's downloads bar.";
-    trackDownloadCompletion(downloadId, fileUrl, filename, els.sampleBtnTunebat, "__sample__");
+    const downloadId = await startDownload(`${SERVER}${data.downloadUrl}`, filename, { source: "sample", title, format });
+    els.sampleProgress.textContent =
+      downloadId === null
+        ? "Save cancelled."
+        : settings.analyze
+          ? "Saved — analyzing BPM & key on Tunebat in the background."
+          : "Download started — check Chrome's downloads bar.";
+    sampleResultCard.refresh();
   } catch (err) {
     els.sampleProgress.textContent = `Error: ${err.message}`;
   } finally {
@@ -450,9 +451,7 @@ async function handleDiscardRecording() {
   els.samplePlayBtn.classList.remove("playing");
   els.sampleFilename.value = "";
   els.sampleWaveform.getContext("2d").clearRect(0, 0, els.sampleWaveform.width, els.sampleWaveform.height);
-  els.sampleBtnTunebat.classList.add("hidden");
-  delete els.sampleBtnTunebat.dataset.fileUrl;
-  delete els.sampleBtnTunebat.dataset.filename;
+  sampleResultCard.refresh();
   els.sampleStatus.textContent = "Record the audio playing in this tab.";
 }
 

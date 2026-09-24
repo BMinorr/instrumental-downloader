@@ -1051,7 +1051,7 @@ kbd {
   font-size: 11px;
 }
 
-#tab-queue.has-activity::after {
+#tab-link.has-activity::after {
   background: var(--accent-hover);
 }
 
@@ -1099,4 +1099,187 @@ kbd {
 .history-analysis {
   grid-column: 1 / -1;
   margin-top: 2px;
+}
+
+/* ---- Link tab: paste box, batch card ---- */
+#paste-row {
+  align-items: flex-start;
+}
+
+#paste-input {
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.4;
+  min-height: 34px;
+  max-height: 92px;
+  font-size: 12px;
+}
+
+#batch-card {
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid rgba(108, 92, 231, 0.4);
+}
+
+#batch-card .title {
+  margin-bottom: 2px;
+}
+
+#batch-card .meta {
+  margin-bottom: 10px;
+}
+
+/* ---- result card under the format buttons (Tunebat analysis) ---- */
+.result-card {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: rgba(108, 92, 231, 0.13);
+  border: 1px solid rgba(108, 92, 231, 0.4);
+}
+
+.result-line {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.result-line.done {
+  color: var(--text);
+}
+
+.result-line.failed {
+  color: var(--err);
+}
+
+.result-card .analysis-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.history-analysis-line {
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+.history-analysis-line.done {
+  color: var(--accent-hover);
+}
+
+.history-analysis-line.failed {
+  color: var(--err);
+}
+
+/* ---- Settings: draggable blocks + tab list ---- */
+.grip {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: -2px;
+  cursor: grab;
+  user-select: none;
+}
+
+.block-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+}
+
+.block-row.drag-over {
+  border-color: var(--accent);
+  background: rgba(108, 92, 231, 0.08);
+}
+
+.block-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: rgba(108, 92, 231, 0.2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+}
+
+.block-chip.available {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.block-chip.available:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.block-chip.dragging,
+.tab-item.dragging {
+  opacity: 0.4;
+}
+
+.chip-x {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.chip-x:hover {
+  color: var(--err);
+}
+
+.name-help {
+  margin: 0 0 6px;
+}
+
+.name-preview {
+  margin: 0 0 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.sortable-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  cursor: grab;
+}
+
+.tab-item:last-child {
+  border-bottom: none;
+}
+
+.tab-item-label {
+  flex: 1;
 }

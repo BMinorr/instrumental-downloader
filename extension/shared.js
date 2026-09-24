@@ -15,10 +15,49 @@ const FORMATS = [
   { id: "opus", label: "OPUS", sub: "192 kbps", title: "Opus, 192 kbps" },
 ];
 
+// Popup tabs the user can hide/reorder in Settings (Settings itself is always there).
+const TABS = [
+  { id: "file", label: "File" },
+  { id: "link", label: "Link" },
+  { id: "sample", label: "Sample" },
+  { id: "history", label: "History" },
+];
 
-const QUEUE_KEY = "queue"; // download queue (see queue-engine.js / queue.js)
+// Building blocks for downloaded file names (Settings > File name). `example` feeds the
+// live preview. Missing values (no BPM before the analysis, no producer for a recording)
+// are simply skipped.
+const NAME_BLOCKS = [
+  { id: "title", label: "Beat name", example: "Midnight Drive" },
+  { id: "bpm", label: "BPM", example: "140bpm" },
+  { id: "key", label: "Key", example: "Am" },
+  { id: "producer", label: "Producer", example: "Beatmaker" },
+  { id: "camelot", label: "Camelot", example: "8A" },
+  { id: "date", label: "Date", example: "2026-09-25" },
+  { id: "format", label: "Format", example: "MP3" },
+  { id: "custom", label: "Custom text", example: "FREE" },
+];
+const DEFAULT_NAME_BLOCKS = ["title", "bpm", "key", "producer"];
+const NAME_SEPARATORS = [
+  { value: " - ", label: "Beat - 140bpm" },
+  { value: "_", label: "Beat_140bpm" },
+  { value: " ", label: "Beat 140bpm" },
+  { value: " | ", label: "Beat | 140bpm" },
+];
+
+const QUEUE_KEY = "queue"; // download queue (see queue-engine.js / tab-link.js)
 const HISTORY_KEY = "history";
 const HISTORY_MAX = 30;
+const ANALYSIS_JOBS_KEY = "analysisJobs"; // pending Tunebat analyses (see analysis-engine.js)
+
+function newId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// The popup and the worker both write the history; Web Locks (same origin, shared across
+// contexts) keep two read-modify-writes from overwriting each other.
+function withHistoryLock(work) {
+  return navigator.locks.request("history", work);
+}
 
 async function loadHistory() {
   const items = await chrome.storage.local.get(HISTORY_KEY);
@@ -26,12 +65,23 @@ async function loadHistory() {
 }
 
 // Called by startDownload() for every download that was actually started.
-async function recordHistory(entry) {
-  const list = await loadHistory();
-  list.unshift({ ...entry, ts: Date.now() });
-  await chrome.storage.local.set({ [HISTORY_KEY]: list.slice(0, HISTORY_MAX) });
+function recordHistory(entry) {
+  return withHistoryLock(async () => {
+    const list = await loadHistory();
+    list.unshift({ ...entry, ts: Date.now() });
+    await chrome.storage.local.set({ [HISTORY_KEY]: list.slice(0, HISTORY_MAX) });
+  });
 }
 
+function updateHistory(id, patch) {
+  return withHistoryLock(async () => {
+    const list = await loadHistory();
+    const entry = list.find((e) => e.id === id);
+    if (!entry) return;
+    Object.assign(entry, patch);
+    await chrome.storage.local.set({ [HISTORY_KEY]: list });
+  });
+}
 
 const SETTING_KEYS = {
   normalizeLink: "settings.normalize.link",
@@ -44,9 +94,14 @@ const SETTING_KEYS = {
   prefetch: "settings.prefetch",
   formats: "settings.formats",
   tags: "settings.tags",
-  fileNameTemplate: "settings.fileNameTemplate",
-  analysisNameTemplate: "settings.analysisNameTemplate",
+  nameBlocks: "settings.nameBlocks",
+  nameSeparator: "settings.nameSeparator",
+  nameCustom: "settings.nameCustom",
+  tabOrder: "settings.tabOrder",
+  tabsHidden: "settings.tabsHidden",
+  analyze: "settings.analyze",
   deleteOriginal: "settings.deleteOriginal",
+  closeTunebatTab: "settings.closeTunebatTab",
 };
 const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
 
@@ -56,6 +111,9 @@ const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before t
 async function getSettings() {
   const items = await chrome.storage.local.get([...Object.values(SETTING_KEYS), LEGACY_NORMALIZE_KEY]);
   const legacy = items[LEGACY_NORMALIZE_KEY];
+  const tabOrder = validTabOrder(items[SETTING_KEYS.tabOrder]);
+  const hidden = Array.isArray(items[SETTING_KEYS.tabsHidden]) ? items[SETTING_KEYS.tabsHidden] : [];
+  const visibleTabs = tabOrder.filter((id) => !hidden.includes(id));
   return {
     normalize: {
       link: items[SETTING_KEYS.normalizeLink] ?? legacy ?? true,
@@ -69,9 +127,14 @@ async function getSettings() {
     prefetch: items[SETTING_KEYS.prefetch] ?? true,
     formats: validFormatIds(items[SETTING_KEYS.formats]),
     tags: items[SETTING_KEYS.tags] ?? true,
-    fileNameTemplate: items[SETTING_KEYS.fileNameTemplate] || "{title}",
-    analysisNameTemplate: items[SETTING_KEYS.analysisNameTemplate] || DEFAULT_ANALYSIS_TEMPLATE,
-    deleteOriginal: items[SETTING_KEYS.deleteOriginal] ?? false,
+    nameBlocks: validNameBlocks(items[SETTING_KEYS.nameBlocks]),
+    nameSeparator: NAME_SEPARATORS.some((s) => s.value === items[SETTING_KEYS.nameSeparator]) ? items[SETTING_KEYS.nameSeparator] : " - ",
+    nameCustom: items[SETTING_KEYS.nameCustom] ?? "",
+    tabOrder,
+    visibleTabs: visibleTabs.length ? visibleTabs : [tabOrder[0]], // never zero tabs
+    analyze: items[SETTING_KEYS.analyze] ?? true,
+    deleteOriginal: items[SETTING_KEYS.deleteOriginal] ?? true,
+    closeTunebatTab: items[SETTING_KEYS.closeTunebatTab] ?? true,
   };
 }
 
@@ -80,6 +143,20 @@ function validFormatIds(saved) {
   const all = FORMATS.map((f) => f.id);
   const ids = Array.isArray(saved) ? all.filter((id) => saved.includes(id)) : all;
   return ids.length ? ids : all;
+}
+
+// Saved tab order, cleaned up: unknown ids dropped, missing ones appended.
+function validTabOrder(saved) {
+  const all = TABS.map((t) => t.id);
+  const kept = Array.isArray(saved) ? saved.filter((id, i) => all.includes(id) && saved.indexOf(id) === i) : [];
+  return [...kept, ...all.filter((id) => !kept.includes(id))];
+}
+
+// Saved name blocks, cleaned up: known ids only, no repeats, never empty.
+function validNameBlocks(saved) {
+  const known = NAME_BLOCKS.map((b) => b.id);
+  const blocks = Array.isArray(saved) ? saved.filter((id, i) => known.includes(id) && saved.indexOf(id) === i) : [];
+  return blocks.length ? blocks : [...DEFAULT_NAME_BLOCKS];
 }
 
 // What the server needs to know about volume normalization for one category.
@@ -105,16 +182,47 @@ async function getAnalyzeOptions() {
   };
 }
 
-// Builds the saved file's name (without extension) from the "File name" setting.
-// `{title}` and `{uploader}`; separators left dangling by an empty value ("{uploader} - {title}"
-// with no uploader) are trimmed, and characters Windows/macOS don't allow become "_".
-function buildFileName(template, values) {
-  const name = String(template || "{title}")
-    .replace(/\{(title|uploader)\}/g, (_, key) => values[key] || "")
-    .replace(/\(\s*\)|\[\s*\]/g, "") // brackets left empty by a missing value
-    .replace(/\s+/g, " ")
-    .replace(/^[\s\-–_.]+|[\s\-–_.]+$/g, "")
+// "A minor" -> "Am", "F# major" -> "F#", "B♭ minor" -> "Bbm" (short form for file names).
+function shortKey(key) {
+  const match = String(key || "").trim().match(/^([A-G])\s*([#♯b♭]?)\s*(major|minor)$/i);
+  if (!match) return "";
+  const accidental = match[2].replace("♯", "#").replace("♭", "b");
+  return `${match[1].toUpperCase()}${accidental}${match[3].toLowerCase() === "minor" ? "m" : ""}`;
+}
+
+// The text of each name block for one file. `values`: title, producer, format, and — once
+// the Tunebat analysis is in — bpm (number), key ("A minor"), camelot ("8A").
+function nameBlockValues(values, settings) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  return {
+    title: values.title || "",
+    producer: values.producer || "",
+    bpm: values.bpm ? `${Math.round(values.bpm)}bpm` : "",
+    key: shortKey(values.key) || "",
+    camelot: values.camelot || "",
+    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    format: String(values.format || "").toUpperCase(),
+    custom: settings.nameCustom || "",
+  };
+}
+
+// Builds the saved file's name (no extension) from the user's blocks, in their order.
+// Empty blocks are skipped; a producer already named inside the title ("Producer - Beat")
+// isn't repeated; characters Windows/macOS don't allow become "_".
+function buildName(settings, values) {
+  const blockValues = nameBlockValues(values, settings);
+  const parts = [];
+  for (const id of settings.nameBlocks) {
+    const text = String(blockValues[id] || "").trim();
+    if (!text) continue;
+    if (id === "producer" && parts.join(" ").toLowerCase().includes(text.toLowerCase())) continue;
+    parts.push(text);
+  }
+  const name = parts
+    .join(settings.nameSeparator)
     .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, " ")
     .slice(0, 150)
     .trim();
   return name || "instrumental";
@@ -129,25 +237,39 @@ function cleanSubfolder(value) {
     .join("/");
 }
 
+// Asks the background worker to analyze a downloaded file on Tunebat (worker context: call
+// straight in — `enqueueAnalysis` only exists there).
+function requestAnalysis(job) {
+  if (typeof enqueueAnalysis === "function") return enqueueAnalysis(job);
+  return chrome.runtime.sendMessage({ type: "analysis:enqueue", job });
+}
+
 // Starts a Chrome download honoring the Downloads settings. Returns the download id, or
-// null if the user cancelled the "save as" dialog.
+// null if the user cancelled the "save as" dialog. With `meta` ({source, title, producer,
+// format, mediaUrl, queueId}) the download is recorded in History and — unless turned
+// off in Settings — sent for BPM/key analysis, after which the worker re-saves it under
+// its final name.
 async function startDownload(url, filename, meta = null, { forceNoDialog = false } = {}) {
-  const { saveAs, subfolder } = await getSettings();
-  const folder = cleanSubfolder(subfolder);
+  const settings = await getSettings();
+  const folder = cleanSubfolder(settings.subfolder);
   const fullName = folder ? `${folder}/${filename}` : filename;
   let downloadId;
   try {
-    downloadId = await chrome.downloads.download({ url, filename: fullName, saveAs: forceNoDialog ? false : saveAs });
+    downloadId = await chrome.downloads.download({ url, filename: fullName, saveAs: forceNoDialog ? false : settings.saveAs });
   } catch (err) {
     if (/cancel/i.test(err.message)) return null;
     throw err;
   }
   if (meta) {
-    recordHistory({ ...meta, filename: fullName, fileUrl: url, downloadId }).catch(() => {});
+    const historyId = newId();
+    const analyze = settings.analyze && meta.analyze !== false;
+    await recordHistory({ ...meta, id: historyId, filename: fullName, fileUrl: url, downloadId, analysis: analyze ? "pending" : undefined });
+    if (analyze) {
+      requestAnalysis({ ...meta, id: historyId, historyId, fileUrl: url, downloadId, filename: fullName }).catch(() => {});
+    }
   }
   return downloadId;
 }
-
 
 // A hint for errors that usually mean yt-dlp is out of date.
 function withYtdlpHint(message) {
@@ -156,46 +278,8 @@ function withYtdlpHint(message) {
     : message;
 }
 
-
-
-// --- Tunebat analysis results (BPM / key) ---
-// background.js reads them off the Tunebat page after a file is analyzed and stores them
-// per server file URL; the popup shows them and can save a copy named with BPM + key.
-
-const ANALYSIS_PREFIX = "analysis:";
-
-const DEFAULT_ANALYSIS_TEMPLATE = "{title} - {bpm}bpm - {keyshort}";
-
-async function getAnalysis(fileUrl) {
-  if (!fileUrl) return null;
-  const items = await chrome.storage.local.get(ANALYSIS_PREFIX + fileUrl);
-  return items[ANALYSIS_PREFIX + fileUrl] || null;
-}
-
-// "A minor" -> "Am", "F# major" -> "F#", "B♭ minor" -> "Bbm" (short form for file names).
-function shortKey(key) {
-  const match = String(key || "").trim().match(/^([A-G])\s*([#♯b♭]?)\s*(major|minor)$/i);
-  if (!match) return "";
-  const accidental = match[2].replace("♯", "#").replace("♭", "b");
-  return `${match[1].toUpperCase()}${accidental}${match[3].toLowerCase() === "minor" ? "m" : ""}`;
-}
-
-// Name for the "with BPM & key" copy. Placeholders: {title} (the saved file's name),
-// {bpm}, {key} ("A minor"), {keyshort} ("Am"), {camelot} ("8A").
-function buildAnalysisName(template, values) {
-  const name = String(template || DEFAULT_ANALYSIS_TEMPLATE)
-    .replace(/\{(title|bpm|key|keyshort|camelot)\}/g, (_, k) => values[k] ?? "")
-    .replace(/\(\s*\)|\[\s*\]/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/^[\s\-–_.]+|[\s\-–_.]+$/g, "")
-    .replace(/[\\/:*?"<>|]/g, "_")
-    .slice(0, 150)
-    .trim();
-  return name || "instrumental";
-}
-
-
 // --- Link helpers used by the popup and the queue ---
+
 
 function extractMediaId(url) {
   const ytMatch = url.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{6,})/i);

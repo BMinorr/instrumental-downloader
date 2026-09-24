@@ -11,15 +11,9 @@
         <button id="tab-file" class="tab-btn">File</button>
         <button id="tab-link" class="tab-btn">Link</button>
         <button id="tab-sample" class="tab-btn">Sample</button>
-        <button id="tab-queue" class="tab-btn">Queue</button>
+        <button id="tab-history" class="tab-btn">History</button>
       </div>
       <div id="header-right">
-        <button id="tab-history" class="icon-tab-btn" aria-label="History" title="History">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"></circle>
-            <polyline points="12 7 12 12 15.5 14"></polyline>
-          </svg>
-        </button>
         <button id="tab-settings" class="icon-tab-btn" aria-label="Settings" title="Settings">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -54,13 +48,13 @@
 
         <p id="file-progress" class="hidden"></p>
 
-        <button id="btn-file-tunebat" class="secondary-btn hidden">Analyze BPM &amp; Key on Tunebat</button>
+        <div id="file-result-card" class="result-card hidden"></div>
       </div>
 
       <div id="panel-link" class="hidden">
         <div id="paste-row">
-          <input id="paste-input" type="text" class="text-input" placeholder="Paste a link…" spellcheck="false" autocomplete="off" />
-          <button id="paste-go" class="icon-btn neutral" aria-label="Load link" title="Load link">
+          <textarea id="paste-input" class="text-input" rows="1" placeholder="Paste a link — or several, or a playlist" spellcheck="false" autocomplete="off"></textarea>
+          <button id="paste-go" class="icon-btn neutral" aria-label="Load link" title="Load link (Enter)">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="5" y1="12" x2="19" y2="12"></line>
               <polyline points="12 5 19 12 12 19"></polyline>
@@ -69,6 +63,12 @@
         </div>
 
         <p id="status-message" class="hidden"></p>
+
+        <div id="batch-card" class="hidden">
+          <p id="batch-summary" class="title"></p>
+          <p class="meta">Choose a format to add them all to the queue.</p>
+          <div id="batch-format-options" class="format-grid"></div>
+        </div>
 
         <div id="track-info" class="hidden">
           <div id="thumb-box" class="loading"><img id="thumbnail" alt="" /></div>
@@ -82,7 +82,17 @@
 
         <p id="progress" class="hidden"></p>
 
-        <button id="btn-tunebat" class="secondary-btn hidden">Analyze BPM &amp; Key on Tunebat</button>
+        <div id="link-result-card" class="result-card hidden"></div>
+
+        <div id="queue-section" class="hidden">
+          <p id="queue-summary" class="queue-summary"></p>
+          <ul id="queue-list"></ul>
+          <div id="queue-footer">
+            <button id="queue-retry" class="secondary-btn hidden">Retry failed</button>
+            <button id="queue-clear-done" class="secondary-btn hidden">Clear finished</button>
+            <button id="queue-clear-all" class="secondary-btn">Clear all</button>
+          </div>
+        </div>
       </div>
 
       <div id="panel-sample" class="hidden">
@@ -131,7 +141,7 @@
 
           <p id="sample-progress" class="hidden"></p>
 
-          <button id="sample-btn-tunebat" class="secondary-btn hidden">Analyze BPM &amp; Key on Tunebat</button>
+          <div id="sample-result-card" class="result-card hidden"></div>
         </div>
 
         <div id="sample-record-area">
@@ -142,23 +152,6 @@
           <button id="sample-record-btn" aria-label="Record">
             <span id="sample-record-icon"></span>
           </button>
-        </div>
-      </div>
-
-      <div id="panel-queue" class="hidden">
-        <textarea id="queue-input" class="text-input" rows="3" placeholder="Paste links — one per line — or a YouTube playlist" spellcheck="false"></textarea>
-        <div id="queue-controls">
-          <select id="queue-format" class="settings-input" aria-label="Format"></select>
-          <button id="queue-add" class="secondary-btn strong">Add to queue</button>
-        </div>
-        <p id="queue-message" class="meta hidden"></p>
-        <p id="queue-empty" class="meta">Nothing queued. Downloads keep running with this window closed.</p>
-        <p id="queue-summary" class="queue-summary"></p>
-        <ul id="queue-list"></ul>
-        <div id="queue-footer" class="hidden">
-          <button id="queue-retry" class="secondary-btn hidden">Retry failed</button>
-          <button id="queue-clear-done" class="secondary-btn hidden">Clear finished</button>
-          <button id="queue-clear-all" class="secondary-btn">Clear all</button>
         </div>
       </div>
 
@@ -195,6 +188,48 @@
         </section>
 
         <section class="settings-section">
+          <h2 class="settings-title">File names</h2>
+          <p class="meta name-help">Drag blocks to reorder them. Drag one to “Available” (or press ×) to leave it out.</p>
+          <div id="name-used" class="block-row" data-list="used"></div>
+          <p class="meta name-help">Available</p>
+          <div id="name-available" class="block-row" data-list="available"></div>
+          <div class="settings-row">
+            <span>Separator</span>
+            <select id="setting-name-separator" class="settings-input"></select>
+          </div>
+          <div id="name-custom-row" class="settings-row hidden">
+            <span>Custom text</span>
+            <input id="setting-name-custom" type="text" class="settings-input" placeholder="e.g. FREE" spellcheck="false" />
+          </div>
+          <p class="meta name-help">Preview</p>
+          <p id="name-preview" class="name-preview"></p>
+          <p class="meta">BPM and Key are filled in after the Tunebat analysis (below). Blocks with nothing to show are skipped.</p>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-title">BPM &amp; key (Tunebat)</h2>
+          <label class="settings-row">
+            <span>Analyze after each download</span>
+            <span class="switch"><input type="checkbox" id="setting-analyze" /><span class="switch-track"></span></span>
+          </label>
+          <label class="settings-row">
+            <span>Delete the first copy</span>
+            <span class="switch"><input type="checkbox" id="setting-delete-original" /><span class="switch-track"></span></span>
+          </label>
+          <label class="settings-row">
+            <span>Close the Tunebat tab when done</span>
+            <span class="switch"><input type="checkbox" id="setting-close-tunebat" /><span class="switch-track"></span></span>
+          </label>
+          <p class="meta">Every download is sent to Tunebat in a background tab (your current tab stays as it is). The BPM and key found there go into the file name and tags: the file is saved again under its final name and the first copy is deleted once that finishes. Not applied when “Ask where to save” is on.</p>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-title">Tabs</h2>
+          <ul id="tabs-list" class="sortable-list"></ul>
+          <p class="meta">Drag to reorder, switch to hide. Settings is always there.</p>
+        </section>
+
+        <section class="settings-section">
           <h2 class="settings-title">Downloads</h2>
           <label class="settings-row">
             <span>Ask where to save each file</span>
@@ -204,23 +239,11 @@
             <span>Subfolder</span>
             <input id="setting-subfolder" type="text" class="settings-input" placeholder="e.g. Instrumentals" spellcheck="false" />
           </div>
-          <div class="settings-row">
-            <span>File name</span>
-            <input id="setting-file-name" type="text" class="settings-input" placeholder="{title}" spellcheck="false" />
-          </div>
-          <div class="settings-row">
-            <span>BPM &amp; key name</span>
-            <input id="setting-analysis-name" type="text" class="settings-input" placeholder="{title} - {bpm}bpm - {keyshort}" spellcheck="false" />
-          </div>
-          <label class="settings-row">
-            <span>Delete original when renaming</span>
-            <span class="switch"><input type="checkbox" id="setting-delete-original" /><span class="switch-track"></span></span>
-          </label>
           <label class="settings-row">
             <span>Tags &amp; cover art</span>
             <span class="switch"><input type="checkbox" id="setting-tags" /><span class="switch-track"></span></span>
           </label>
-          <p class="meta">Files go to your Chrome downloads folder, inside the subfolder if set. Name pattern: <code>{title}</code> and <code>{uploader}</code>, e.g. <code>{uploader} - {title}</code>. Tags (title, artist, source link) and the video's picture as cover art are added to Link downloads. After a Tunebat analysis, “Rename with BPM &amp; key” saves a copy using the BPM name pattern (<code>{title}</code> <code>{bpm}</code> <code>{key}</code> <code>{keyshort}</code> <code>{camelot}</code>).</p>
+          <p class="meta">Files go to your Chrome downloads folder, inside the subfolder if set. Tags (title, artist, source link) and the video's picture as cover art are added to Link downloads.</p>
         </section>
 
         <section class="settings-section">
@@ -233,12 +256,7 @@
           <h2 class="settings-title">General</h2>
           <div class="settings-row">
             <span>Open on</span>
-            <select id="setting-start-tab" class="settings-input">
-              <option value="last">Last used tab</option>
-              <option value="file">File</option>
-              <option value="link">Link</option>
-              <option value="sample">Sample</option>
-            </select>
+            <select id="setting-start-tab" class="settings-input"></select>
           </div>
           <label class="settings-row">
             <span>Prepare MP3 &amp; WAV in advance</span>
@@ -282,7 +300,7 @@
         <section class="settings-section">
           <h2 class="settings-title">Data</h2>
           <button id="settings-btn-clear-cache" class="secondary-btn">Clear cached data</button>
-          <p class="meta">Forgets remembered track info, the active tab, and pending downloads. Keeps your settings and history, and doesn't touch saved files.</p>
+          <p class="meta">Forgets remembered track info and the last active tab. Keeps your settings, history and download queue, and doesn't touch saved files.</p>
         </section>
 
         <p class="meta settings-version">Downloader v<span id="app-version">0.1.0</span> by <a href="https://bminorr.github.io/" target="_blank" rel="noopener noreferrer">B Minor</a></p>
@@ -291,9 +309,7 @@
 
     <script src="shared.js"></script>
     <script src="dom.js"></script>
-    <script src="history.js"></script>
-    <script src="queue.js"></script>
-    <script src="analysis.js"></script>
+    <script src="tab-history.js"></script>
     <script src="tab-link.js"></script>
     <script src="tab-file.js"></script>
     <script src="tab-sample.js"></script>

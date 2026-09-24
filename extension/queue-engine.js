@@ -2,13 +2,18 @@
 // keeps going with the popup closed. State lives in chrome.storage.local["queue"]; the popup
 // only renders it (storage.onChanged) and sends commands (queue:add / remove / retry / clear).
 //
-// Items run one at a time: yt-dlp's extraction is the heavy part, and this keeps the CPU and
-// the network calm. If the worker is killed mid-download, the next start puts the interrupted
-// item back in line (resumeQueue) and carries on.
+// Two items run at a time: yt-dlp's extraction (~3 s of mostly waiting on the network) is the
+// slow part, so overlapping two roughly halves a batch without loading the CPU much. If the
+// worker is killed mid-download, the next start puts the interrupted items back in line
+// (resumeQueue) and carries on. Each saved item is then handed to the analysis engine.
 
 const QUEUE_MAX = 300;
 
-let queueRunning = false;
+const QUEUE_CONCURRENCY = 2;
+let queueWorkers = 0;
+let queueProcessed = 0;
+let queueFailed = 0;
+let queueKeepAlive = null;
 let queueLock = Promise.resolve();
 
 async function loadQueue() {
@@ -93,32 +98,40 @@ async function resumeQueue() {
   runQueue();
 }
 
-async function runQueue() {
-  if (queueRunning) return;
-  queueRunning = true;
-  // Any extension API call resets the worker's idle timer, so a long batch isn't cut off.
-  const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(), 20000);
-  let processed = 0;
-  let failed = 0;
-  try {
-    for (;;) {
-      await updateQueueBadge();
-      const item = await mutateQueue((queue) => {
-        const next = queue.find((i) => i.status === "queued");
-        if (!next) return null;
-        Object.assign(next, { status: "working", step: "Starting…", error: "" });
-        return { ...next };
-      });
-      if (!item) break;
-      const ok = await processQueueItem(item);
-      processed++;
-      if (!ok) failed++;
+function runQueue() {
+  // Top up to QUEUE_CONCURRENCY lanes; each lane takes items until none are left.
+  while (queueWorkers < QUEUE_CONCURRENCY) {
+    if (queueWorkers === 0) {
+      queueProcessed = 0;
+      queueFailed = 0;
+      // Any extension API call resets the worker's idle timer, so a long batch isn't cut off.
+      queueKeepAlive = setInterval(() => chrome.runtime.getPlatformInfo(), 20000);
     }
-  } finally {
-    clearInterval(keepAlive);
-    queueRunning = false;
+    queueWorkers++;
+    queueLane().finally(async () => {
+      queueWorkers--;
+      if (queueWorkers === 0) {
+        clearInterval(queueKeepAlive);
+        await updateQueueBadge(queueProcessed, queueFailed);
+      }
+    });
   }
-  await updateQueueBadge(processed, failed);
+}
+
+async function queueLane() {
+  for (;;) {
+    await updateQueueBadge();
+    const item = await mutateQueue((queue) => {
+      const next = queue.find((i) => i.status === "queued");
+      if (!next) return null;
+      Object.assign(next, { status: "working", step: "Starting…", error: "" });
+      return { ...next };
+    });
+    if (!item) return;
+    const ok = await processQueueItem(item);
+    queueProcessed++;
+    if (!ok) queueFailed++;
+  }
 }
 
 async function processQueueItem(item) {
@@ -154,17 +167,24 @@ async function processQueueItem(item) {
 
     title = data.title || title;
     uploader = data.uploader ?? uploader;
-    const filename = `${buildFileName(settings.fileNameTemplate, { title, uploader })}.${item.format}`;
+    // BPM/key aren't known yet: the analysis engine re-saves the file under its final name.
+    const filename = `${buildName(settings, { title, producer: uploader, format: item.format })}.${item.format}`;
 
     await step("Saving…");
     // No "save as" dialog here, whatever the setting says: a dialog per item would defeat a queue.
     const downloadId = await startDownload(
       `${SERVER}${data.downloadUrl}`,
       filename,
-      { source: "link", title: title || filename, format: item.format, mediaUrl: url },
+      { source: "link", title: title || filename, producer: uploader, format: item.format, mediaUrl: url, queueId: item.id },
       { forceNoDialog: true }
     );
-    await patchQueueItem(item.id, { status: "done", title: title || item.title, step: "", downloadId });
+    await mutateQueue((queue) => {
+      const saved = queue.find((i) => i.id === item.id);
+      if (!saved) return;
+      Object.assign(saved, { status: "done", title: title || item.title, step: "", downloadId });
+      // (the analysis may already be further along than "pending" by the time we get here)
+      if (settings.analyze && !saved.analysis) saved.analysis = "pending";
+    });
     return true;
   } catch (err) {
     const message = err instanceof TypeError ? "Can't reach the local server. Is it running?" : withYtdlpHint(err.message);

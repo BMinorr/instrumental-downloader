@@ -1,5 +1,7 @@
-const TUNEBAT_URL = "https://tunebat.com/Analyzer";
+// Popup bootstrap: server status, tabs (order/visibility from Settings) and startup.
 
+// Checks the local server and shows the result in Settings > Local server (dot + text),
+// plus a red dot on the Settings gear while it's unreachable so it's visible from any tab.
 async function checkServer() {
   els.serverDot.className = "dot";
   els.settingsServerText.textContent = "Checking…";
@@ -25,25 +27,14 @@ function setServerAlert(down) {
   els.tabSettings.setAttribute("aria-label", label);
 }
 
+// The page open in the current tab (what the Link tab loads by default).
+let activeTabInfo = { url: "", title: "", ready: false };
+let linkLoaded = false;
+
 async function main() {
-  els.btnTunebat.addEventListener("click", makeTunebatHandler(els.btnTunebat, els.progress));
-  initAnalysisUpdates();
-  const linkCard = buildAnalysisCard(
-    () => ({ fileUrl: els.btnTunebat.dataset.fileUrl, filename: els.btnTunebat.dataset.filename, downloadId: els.btnTunebat.dataset.downloadId, source: "link", mediaUrl: currentMedia?.url }),
-    (text) => { els.progress.classList.remove("hidden"); els.progress.textContent = text; }
-  );
-  els.btnTunebat.after(linkCard.el);
-  analysisCardFor.set(els.btnTunebat, linkCard);
-  const sampleCard = buildAnalysisCard(
-    () => ({ fileUrl: els.sampleBtnTunebat.dataset.fileUrl, filename: els.sampleBtnTunebat.dataset.filename, downloadId: els.sampleBtnTunebat.dataset.downloadId, source: "sample" }),
-    (text) => { els.sampleProgress.classList.remove("hidden"); els.sampleProgress.textContent = text; }
-  );
-  els.sampleBtnTunebat.after(sampleCard.el);
-  analysisCardFor.set(els.sampleBtnTunebat, sampleCard);
   getSettings().then((settings) => applyVisibleFormats(settings.formats));
   initFileTab();
   initHistoryTab();
-  initQueueTab();
   initSampleTab();
   initSettingsTab();
 
@@ -52,41 +43,70 @@ async function main() {
     setupTabs(),
     chrome.tabs.query({ active: true, currentWindow: true }),
   ]);
-  activeTabInfo = { url: tab?.url || "", title: tab?.title || "" };
+  activeTabInfo = { url: tab?.url || "", title: tab?.title || "", ready: true };
   initPasteRow();
-  await loadLink(activeTabInfo.url, { tabTitle: activeTabInfo.title });
+  ensureLinkLoaded();
+  // The Link flow checks the server itself; with that tab hidden, still show the status.
+  if (!linkLoaded) checkServer();
 }
 
-// The page open in the current tab (what the Link tab loads by default).
-const TAB_NAMES = ["file", "link", "sample", "queue", "history", "settings"];
+// The Link tab's work (analysis + background prefetch on the server) starts only if the tab
+// is actually in use — a hidden or never-opened Link tab costs nothing.
+function ensureLinkLoaded() {
+  if (linkLoaded || !activeTabInfo.ready || els.panelLink.classList.contains("hidden")) return;
+  linkLoaded = true;
+  loadLink(activeTabInfo.url, { tabTitle: activeTabInfo.title });
+}
+
+// --- Tabs ---
+
+const TAB_ELEMENTS = {
+  file: [els.tabFile, els.panelFile],
+  link: [els.tabLink, els.panelLink],
+  sample: [els.tabSample, els.panelSample],
+  history: [els.tabHistory, els.panelHistory],
+  settings: [els.tabSettings, els.panelSettings],
+};
+let visibleTabs = TABS.map((t) => t.id);
+
+// Order and visibility come from Settings (Settings itself is always available).
+function applyTabSettings(settings) {
+  visibleTabs = settings.visibleTabs;
+  for (const id of settings.tabOrder) {
+    const button = TAB_ELEMENTS[id][0];
+    els.tabsBar.appendChild(button); // re-appending moves it: this is the reordering
+    button.classList.toggle("hidden", !visibleTabs.includes(id));
+  }
+}
 
 async function setupTabs() {
-  els.tabFile.addEventListener("click", () => switchTab("file"));
-  els.tabLink.addEventListener("click", () => switchTab("link"));
-  els.tabSample.addEventListener("click", () => switchTab("sample"));
-  els.tabQueue.addEventListener("click", () => switchTab("queue"));
-  els.tabHistory.addEventListener("click", () => switchTab("history"));
-  els.tabSettings.addEventListener("click", () => switchTab("settings"));
+  for (const [id, [button]] of Object.entries(TAB_ELEMENTS)) button.addEventListener("click", () => switchTab(id));
+
+  const settings = await getSettings();
+  applyTabSettings(settings);
+  chrome.storage.onChanged.addListener(async (changes, area) => {
+    if (area !== "local" || !(SETTING_KEYS.tabOrder in changes || SETTING_KEYS.tabsHidden in changes)) return;
+    applyTabSettings(await getSettings());
+  });
 
   // Remember whichever tab was open last, so reopening the popup lands back on it.
   const stored = await chrome.storage.local.get("activeTab");
-  const { startTab } = await getSettings();
-  const wanted = startTab === "last" ? stored.activeTab : startTab;
-  switchTab(TAB_NAMES.includes(wanted) ? wanted : "link");
+  const wanted = settings.startTab === "last" ? stored.activeTab : settings.startTab;
+  const fallback = visibleTabs.includes("link") ? "link" : visibleTabs[0];
+  switchTab(wanted === "settings" || visibleTabs.includes(wanted) ? wanted : fallback);
 }
 
 function switchTab(which) {
-  const tabs = { file: els.tabFile, link: els.tabLink, sample: els.tabSample, queue: els.tabQueue, history: els.tabHistory, settings: els.tabSettings };
-  const panels = { file: els.panelFile, link: els.panelLink, sample: els.panelSample, queue: els.panelQueue, history: els.panelHistory, settings: els.panelSettings };
-  for (const name of TAB_NAMES) {
-    const isActive = name === which;
-    tabs[name].classList.toggle("active", isActive);
-    panels[name].classList.toggle("hidden", !isActive);
+  if (which !== "settings" && !visibleTabs.includes(which)) which = visibleTabs[0];
+  for (const [id, [button, panel]] of Object.entries(TAB_ELEMENTS)) {
+    const isActive = id === which;
+    button.classList.toggle("active", isActive);
+    panel.classList.toggle("hidden", !isActive);
   }
   chrome.storage.local.set({ activeTab: which });
   if (which === "settings") refreshYtdlpStatus();
   if (which === "history") renderHistory();
+  if (which === "link") ensureLinkLoaded();
 }
-
 
 main();

@@ -1,13 +1,16 @@
-// --- File tab: pick/drop a local audio file, then convert it or analyze it on Tunebat ---
+// --- File tab: pick/drop a local audio file, then convert it ---
 // The file is copied to the local server once (POST /api/stash) the first time it's needed
-// and reused for every conversion after that. It has to go through the server for Tunebat
-// too: the popup closes the moment the Tunebat tab opens, so the background worker fetches
-// the bytes by URL instead.
+// and reused for every conversion after that.
 
 const FILE_EXTS = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "aiff", "aif", "opus"]; // /api/stash whitelist
-const TUNEBAT_EXTS = ["mp3", "wav", "flac", "aac", "ogg", "m4a"]; // what Tunebat's uploader accepts
 const FILE_MAX_BYTES = 100 * 1024 * 1024; // matches the server's /api/stash limit
 let selectedFile = null;
+// The Tunebat analysis of the file that was just converted (History has the full record).
+const fileResultCard = createResultCard(els.fileResultCard, (history) => {
+  if (!selectedFile) return null;
+  const title = fileBaseName(selectedFile.name);
+  return history.find((e) => e.source === "file" && e.title === title && Date.now() - e.ts < 15 * 60 * 1000) || null;
+});
 let stash = null; // server copy of selectedFile: { name, url } — null until first upload
 
 function fileExtension(name) {
@@ -70,20 +73,11 @@ function initFileTab() {
   });
   document.addEventListener("dragover", (e) => e.preventDefault());
   document.addEventListener("drop", (e) => e.preventDefault());
-
-  const openTunebat = makeTunebatHandler(els.btnFileTunebat, els.fileProgress);
-  els.btnFileTunebat.addEventListener("click", async () => {
-    if (!selectedFile) return;
-    if (!els.btnFileTunebat.dataset.fileUrl && !(await prepareTunebatFile())) return;
-    openTunebat();
-  });
 }
 
 function selectFile(file) {
   setFileMessage("");
   stash = null;
-  delete els.btnFileTunebat.dataset.fileUrl;
-  delete els.btnFileTunebat.dataset.filename;
 
   if (file) {
     if (!FILE_EXTS.includes(fileExtension(file.name))) {
@@ -98,9 +92,9 @@ function selectFile(file) {
   selectedFile = file;
   els.fileDropzone.classList.toggle("has-file", !!file);
   els.fileClear.classList.toggle("hidden", !file);
-  // Nothing to convert or analyze until a file is chosen.
+  // Nothing to convert until a file is chosen.
   els.fileFormatOptions.classList.toggle("hidden", !file);
-  els.btnFileTunebat.classList.toggle("hidden", !file);
+  fileResultCard.refresh();
   els.fileDropzoneTitle.textContent = file ? file.name : "Drop an audio file here";
   els.fileDropzoneSub.textContent = file
     ? `${formatBytes(file.size)} · click to choose another`
@@ -139,57 +133,30 @@ async function handleFileConvert(format) {
   if (!selectedFile) return;
   const file = selectedFile;
   fileGrid.setBusy(format);
-  els.btnFileTunebat.disabled = true;
   try {
     if (!stash) setFileMessage("Uploading…");
     await ensureStash();
     setFileMessage("Converting…");
     const converted = await convertStash(format, await getNormalizeOptions("file"));
 
-    const downloadId = await startDownload(converted.url, `${fileBaseName(file.name)}.${format}`, {
+    const settings = await getSettings();
+    const title = fileBaseName(file.name);
+    const downloadId = await startDownload(converted.url, `${buildName(settings, { title, format })}.${format}`, {
       source: "file",
-      title: fileBaseName(file.name),
+      title,
       format,
     });
     setFileMessage(
-      downloadId === null ? "Save cancelled." : "Download started — check Chrome's downloads bar."
+      downloadId === null
+        ? "Save cancelled."
+        : settings.analyze
+          ? "Saved — analyzing BPM & key on Tunebat in the background."
+          : "Download started — check Chrome's downloads bar."
     );
+    fileResultCard.refresh();
   } catch (err) {
     setFileMessage(describeError(err));
   } finally {
-    fileGrid.setBusy(null);
-    els.btnFileTunebat.disabled = false;
-  }
-}
-
-// Points the Tunebat button at a file Tunebat will accept: the stashed copy as-is, or —
-// for types its uploader rejects (AIFF, OPUS) — a WAV made from it first (never
-// normalized: this is just a container change so the analysis sees the original audio).
-async function prepareTunebatFile() {
-  const button = els.btnFileTunebat;
-  const originalLabel = button.textContent;
-  const file = selectedFile;
-  button.disabled = true;
-  fileGrid.setBusy(""); // dims the format buttons too (no id matches, so none spins)
-  try {
-    button.textContent = "Uploading…";
-    await ensureStash();
-    if (TUNEBAT_EXTS.includes(fileExtension(file.name))) {
-      button.dataset.fileUrl = stash.url;
-      button.dataset.filename = file.name;
-    } else {
-      button.textContent = "Converting…";
-      const converted = await convertStash("wav", { loudnorm: false });
-      button.dataset.fileUrl = converted.url;
-      button.dataset.filename = `${fileBaseName(file.name)}.wav`;
-    }
-    return true;
-  } catch (err) {
-    setFileMessage(describeError(err));
-    return false;
-  } finally {
-    button.disabled = false;
-    button.textContent = originalLabel;
     fileGrid.setBusy(null);
   }
 }

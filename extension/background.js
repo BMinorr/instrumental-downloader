@@ -1,34 +1,18 @@
-importScripts("shared.js", "queue-engine.js");
-
-// Runs independently of the popup (which closes/reopens constantly), so download
-// completion is tracked reliably even if the user closes the popup mid-download.
-
-// When a tracked download finishes, merge the file info into that media's cached
-// bundle so the popup can show the Tunebat button next time it's opened — even if
-// it wasn't open when the download actually completed.
-chrome.downloads.onChanged.addListener(async (delta) => {
-  if (!delta.state || delta.state.current !== "complete") return;
-
-  const pendingKey = `pendingDownload:${delta.id}`;
-  const pendingItems = await chrome.storage.local.get(pendingKey);
-  const pending = pendingItems[pendingKey];
-  if (!pending) return;
-
-  await chrome.storage.local.remove(pendingKey);
-
-  const bundleKey = `bundle:${pending.cacheKey}`;
-  const bundleItems = await chrome.storage.local.get(bundleKey);
-  const bundle = bundleItems[bundleKey] || {};
-  bundle.downloadedFile = { fileUrl: pending.fileUrl, filename: pending.filename, downloadId: delta.id };
-  await chrome.storage.local.set({ [bundleKey]: bundle });
-});
+importScripts("shared.js", "tunebat.js", "queue-engine.js", "analysis-engine.js");
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.target === "offscreen") return; // not for us
 
-  if (message.type === "openInTunebat") {
-    openInTunebat(message.fileUrl, message.filename)
+  if (message.type === "analysis:enqueue") {
+    enqueueAnalysis(message.job)
       .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (message.type === "analysis:retry") {
+    retryAnalysis(message.historyId)
+      .then((ok) => sendResponse({ ok }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   }
@@ -106,8 +90,13 @@ function setBadge(text, color) {
 }
 
 chrome.runtime.onInstalled.addListener(() => setBadge(""));
-chrome.runtime.onStartup.addListener(() => resumeQueue());
-resumeQueue(); // the worker may just have been restarted mid-batch
+chrome.runtime.onStartup.addListener(() => {
+  resumeQueue();
+  resumeAnalysis();
+});
+// The worker may just have been restarted mid-batch: pick up where the last one stopped.
+resumeQueue();
+resumeAnalysis();
 
 // Keyboard shortcut (default Alt+Shift+R, changeable at chrome://extensions/shortcuts):
 // start/stop recording the current tab without opening the popup. The shortcut counts
@@ -189,116 +178,11 @@ async function getLastSampleRecording() {
   return { ok: true, recording: response?.recording || null };
 }
 
-// chrome.scripting.executeScript's `args` must be JSON-serializable (unlike
-// structured clone, an ArrayBuffer does NOT survive it — it silently turns into
-// "{}"). So we base64-encode the audio bytes here and decode them back inside
-// the injected function, which runs in the page's own context.
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
 
-const TUNEBAT_URL = "https://tunebat.com/Analyzer";
 
-async function openInTunebat(fileUrl, filename) {
-  // Fetch first, so a missing/unreachable file is reported to the still-open popup
-  // (once the Tunebat tab opens, the popup closes and can't show errors anymore).
-  const res = await fetch(fileUrl);
-  if (!res.ok) throw new Error("Could not read the file.");
-  const buffer = await res.arrayBuffer();
 
-  const tab = await chrome.tabs.create({ url: TUNEBAT_URL });
 
-  try {
-    // Start polling first, then encode while the page loads: the polling requests are
-    // already in flight, so the (synchronous) encoding doesn't delay the wait.
-    const uploadReady = waitForTunebatUpload(tab.id, 15000);
-    const base64 = arrayBufferToBase64(buffer);
-    await uploadReady;
 
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      // MAIN world: constructs File/DataTransfer using the page's OWN realm, not the
-      // extension's isolated-world copies. If Tunebat's app does an `instanceof File`
-      // check (common in React file-drop handlers), an isolated-world File fails it
-      // silently — the event fires but the app just ignores the "file".
-      world: "MAIN",
-      func: injectFileIntoPage,
-      args: [base64, filename, AUDIO_MIME_TYPES],
-    });
-
-    if (!result?.ok) {
-      throw new Error(result?.reason || "Could not insert the file into Tunebat's page.");
-    }
-    watchTunebatResult(tab.id, filename, fileUrl); // not awaited: it runs long after the popup is gone
-  } catch (err) {
-    // The popup is long gone by now (opening the tab closed it), so an error can't be
-    // shown there — put it on the Tunebat page itself instead.
-    await chrome.scripting
-      .executeScript({
-        target: { tabId: tab.id },
-        world: "MAIN",
-        func: showPageToast,
-        args: [`Couldn't add the file automatically (${err.message}). Drop it here manually.`],
-      })
-      .catch(() => {});
-    throw err;
-  }
-}
-
-// Runs inside the Tunebat tab. Tunebat is a client-side rendered app (its HTML has no
-// upload widget at all), so the file input only exists once React has rendered it — and
-// React attaches its `__reactProps$…` bookkeeping to the element at that point, meaning
-// its change handlers are live. That happens well before the page's full "load" event
-// (which waits on ads/analytics), so we don't wait for "load" or use a fixed delay.
-// If a future React renames those keys, `readyState === "complete"` is the fallback.
-function tunebatUploadReady() {
-  if (!location.hostname.endsWith("tunebat.com")) return false;
-  const input = document.querySelector('input[type="file"]');
-  if (!input) return false;
-  return (
-    Object.keys(input).some((k) => k.startsWith("__reactProps$")) ||
-    document.readyState === "complete"
-  );
-}
-
-// Polls the freshly opened tab until the upload widget is ready. Errors are expected
-// while the tab hasn't navigated yet (nothing scriptable to inject into) — just retry.
-// Resolves false on timeout; the caller still tries the injection, which has its own
-// short wait for the input.
-async function waitForTunebatUpload(tabId, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const [injection] = await chrome.scripting.executeScript({
-        target: { tabId },
-        world: "MAIN",
-        func: tunebatUploadReady,
-      });
-      if (injection?.result) return true;
-    } catch {
-      // not navigated / not scriptable yet
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  return false;
-}
-
-function showPageToast(message) {
-  const toast = document.createElement("div");
-  toast.textContent = message;
-  toast.style.cssText =
-    "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;" +
-    "max-width:80vw;background:#1e2027;color:#f2f2f5;padding:10px 16px;border-radius:8px;" +
-    "font:13px -apple-system,Segoe UI,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.45)";
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 10000);
-}
 
 // --- Reading Tunebat's answer (BPM + key) ---
 // Tunebat analyzes in the page; we read the result row back so the popup can offer to name
@@ -306,122 +190,7 @@ function showPageToast(message) {
 // found by content: the element showing the file name, and the nearest ancestor that also
 // shows a key ("A minor") — then key / Camelot code / BPM are picked out by their shape.
 
-function readTunebatResult(filename) {
-  const leaves = [...document.querySelectorAll("body *")].filter(
-    (e) => e.children.length === 0 && e.textContent.trim() === filename
-  );
-  const nameEl = leaves[leaves.length - 1];
-  if (!nameEl) return null;
 
-  const KEY = /^[A-G][#♯b♭]?\s+(major|minor)$/i;
-  const textsOf = (root) =>
-    [...root.querySelectorAll("*")]
-      .filter((e) => e.children.length === 0 && e !== nameEl)
-      .map((e) => e.textContent.trim())
-      .filter(Boolean);
 
-  // Climb from the file name until the enclosing element also holds a key cell (so a file
-  // name that itself says "minor" can't be mistaken for one).
-  let row = nameEl.parentElement;
-  for (let i = 0; i < 6 && row && !textsOf(row).some((t) => KEY.test(t)); i++) row = row.parentElement;
-  if (!row) return null;
 
-  const texts = textsOf(row);
-  const key = texts.find((t) => KEY.test(t));
-  const camelot = texts.find((t) => /^\d{1,2}[AB]$/.test(t));
-  const bpm = texts.find((t) => /^\d{2,3}(\.\d+)?$/.test(t));
-  return key && bpm ? { key, camelot: camelot || "", bpm: Number(bpm) } : null;
-}
 
-async function watchTunebatResult(tabId, filename, fileUrl) {
-  const deadline = Date.now() + 90000; // big files take a while; give up after 90 s
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 700));
-    let result;
-    try {
-      const [injection] = await chrome.scripting.executeScript({
-        target: { tabId },
-        world: "MAIN",
-        func: readTunebatResult,
-        args: [filename],
-      });
-      result = injection?.result;
-    } catch {
-      return; // the tab was closed or navigated away
-    }
-    if (result) {
-      await saveAnalysis(fileUrl, { ...result, filename, ts: Date.now() });
-      return;
-    }
-  }
-}
-
-async function saveAnalysis(fileUrl, analysis) {
-  // Keep the store tidy: results older than a day are dropped (the server copy is long gone).
-  const all = await chrome.storage.local.get(null);
-  const stale = Object.keys(all).filter(
-    (k) => k.startsWith(ANALYSIS_PREFIX) && Date.now() - (all[k]?.ts || 0) > 24 * 3600 * 1000
-  );
-  if (stale.length) await chrome.storage.local.remove(stale);
-  await chrome.storage.local.set({ [ANALYSIS_PREFIX + fileUrl]: analysis });
-}
-
-const AUDIO_MIME_TYPES = {
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  flac: "audio/flac",
-  aac: "audio/aac",
-  ogg: "audio/ogg",
-  m4a: "audio/m4a",
-};
-
-// Runs inside the Tunebat tab. Tunebat's uploader is a standard (hidden) file
-// input that picks up files via a native "change" event — so we build a real
-// File from the already-downloaded bytes and feed it in the same way a user's
-// own file picker selection would.
-// (It's passed its own copy of the MIME table: the function is serialized into the
-// page, so it can't see anything from this file's scope.)
-async function injectFileIntoPage(base64, filename, mimeTypes) {
-  try {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-    const ext = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
-    const file = new File([bytes], filename, { type: mimeTypes[ext] || "audio/mpeg" });
-
-    // The widget normally exists by now (see waitForTunebatUpload), but on a slow
-    // page keep looking for a few seconds rather than failing outright.
-    let inputs = document.querySelectorAll('input[type="file"]');
-    for (let waited = 0; inputs.length === 0 && waited < 5000; waited += 200) {
-      await new Promise((r) => setTimeout(r, 200));
-      inputs = document.querySelectorAll('input[type="file"]');
-    }
-    if (inputs.length === 0) {
-      return { ok: false, reason: "No file input found on the page." };
-    }
-
-    for (const input of inputs) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      input.files = dataTransfer.files;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-
-    // Also fire a drop event on any visible drop-zone, in case the app's upload
-    // logic is wired there instead of (or in addition to) the input's change event.
-    const dropzone = document.querySelector('[class*="drop" i], [class*="upload" i]');
-    if (dropzone) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      dropzone.dispatchEvent(
-        new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer })
-      );
-    }
-
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, reason: err.message };
-  }
-}

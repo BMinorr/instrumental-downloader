@@ -1,91 +1,108 @@
 // DOM handles, the format-button grid component and small UI helpers shared by all tabs.
 // (Classic scripts sharing globals: see the note in CLAUDE.md before adding a global.)
 
+const $ = (id) => document.getElementById(id);
+
 const els = {
-  statusMessage: document.getElementById("status-message"),
-  trackInfo: document.getElementById("track-info"),
-  thumbnail: document.getElementById("thumbnail"),
-  trackTitle: document.getElementById("track-title"),
-  trackMeta: document.getElementById("track-meta"),
-  formatOptions: document.getElementById("format-options"),
-  progress: document.getElementById("progress"),
-  serverDot: document.getElementById("settings-server-dot"),
-  btnTunebat: document.getElementById("btn-tunebat"),
-  tabFile: document.getElementById("tab-file"),
-  tabLink: document.getElementById("tab-link"),
-  tabSample: document.getElementById("tab-sample"),
-  panelFile: document.getElementById("panel-file"),
-  panelLink: document.getElementById("panel-link"),
-  panelSample: document.getElementById("panel-sample"),
-  sampleStatus: document.getElementById("sample-status"),
-  sampleResult: document.getElementById("sample-result"),
-  sampleAudio: document.getElementById("sample-audio"),
-  sampleFormatOptions: document.getElementById("sample-format-options"),
-  sampleProgress: document.getElementById("sample-progress"),
-  sampleBtnDiscard: document.getElementById("sample-btn-discard"),
-  sampleTimer: document.getElementById("sample-timer"),
-  sampleRecordBtn: document.getElementById("sample-record-btn"),
-  sampleWaveform: document.getElementById("sample-waveform"),
-  sampleFilename: document.getElementById("sample-filename"),
-  sampleBtnTrimSilence: document.getElementById("sample-btn-trim-silence"),
-  sampleFadeIn: document.getElementById("sample-fade-in"),
-  sampleFadeOut: document.getElementById("sample-fade-out"),
-  sampleLevelMeter: document.getElementById("sample-level-meter"),
-  sampleLevelFill: document.getElementById("sample-level-fill"),
-  samplePlayBtn: document.getElementById("sample-play-btn"),
-  sampleBtnTunebat: document.getElementById("sample-btn-tunebat"),
-  tabSettings: document.getElementById("tab-settings"),
-  panelSettings: document.getElementById("panel-settings"),
-  settingNormalizeLink: document.getElementById("setting-normalize-link"),
-  settingNormalizeSample: document.getElementById("setting-normalize-sample"),
-  settingNormalizeFile: document.getElementById("setting-normalize-file"),
-  settingTargetLufs: document.getElementById("setting-target-lufs"),
-  settingSaveAs: document.getElementById("setting-save-as"),
-  settingSubfolder: document.getElementById("setting-subfolder"),
-  settingStartTab: document.getElementById("setting-start-tab"),
-  settingPrefetch: document.getElementById("setting-prefetch"),
-  formatChips: document.getElementById("format-chips"),
-  settingTags: document.getElementById("setting-tags"),
-  settingFileName: document.getElementById("setting-file-name"),
-  settingAnalysisName: document.getElementById("setting-analysis-name"),
-  settingDeleteOriginal: document.getElementById("setting-delete-original"),
-  tabQueue: document.getElementById("tab-queue"),
-  panelQueue: document.getElementById("panel-queue"),
-  queueInput: document.getElementById("queue-input"),
-  queueFormat: document.getElementById("queue-format"),
-  queueAdd: document.getElementById("queue-add"),
-  queueMessage: document.getElementById("queue-message"),
-  queueEmpty: document.getElementById("queue-empty"),
-  queueSummary: document.getElementById("queue-summary"),
-  queueList: document.getElementById("queue-list"),
-  queueFooter: document.getElementById("queue-footer"),
-  queueRetry: document.getElementById("queue-retry"),
-  queueClearDone: document.getElementById("queue-clear-done"),
-  queueClearAll: document.getElementById("queue-clear-all"),
-  tabHistory: document.getElementById("tab-history"),
-  panelHistory: document.getElementById("panel-history"),
-  historyList: document.getElementById("history-list"),
-  historyEmpty: document.getElementById("history-empty"),
-  historyClear: document.getElementById("history-clear"),
-  pasteInput: document.getElementById("paste-input"),
-  pasteGo: document.getElementById("paste-go"),
-  recordingShortcut: document.getElementById("recording-shortcut"),
-  btnShortcuts: document.getElementById("btn-shortcuts"),
-  ytdlpStatus: document.getElementById("ytdlp-status"),
-  btnYtdlpUpdate: document.getElementById("btn-ytdlp-update"),
-  appVersion: document.getElementById("app-version"),
-  settingsServerText: document.getElementById("settings-server-text"),
-  settingsBtnRecheck: document.getElementById("settings-btn-recheck"),
-  settingsBtnClearCache: document.getElementById("settings-btn-clear-cache"),
-  fileInput: document.getElementById("file-input"),
-  fileDropzone: document.getElementById("file-dropzone"),
-  fileDropzoneTitle: document.getElementById("file-dropzone-title"),
-  fileDropzoneSub: document.getElementById("file-dropzone-sub"),
-  fileDropzoneFormats: document.getElementById("file-dropzone-formats"),
-  fileClear: document.getElementById("file-clear"),
-  fileFormatOptions: document.getElementById("file-format-options"),
-  fileProgress: document.getElementById("file-progress"),
-  btnFileTunebat: document.getElementById("btn-file-tunebat"),
+  // header / tabs
+  tabsBar: $("tabs"),
+  tabFile: $("tab-file"),
+  tabLink: $("tab-link"),
+  tabSample: $("tab-sample"),
+  tabHistory: $("tab-history"),
+  tabSettings: $("tab-settings"),
+  panelFile: $("panel-file"),
+  panelLink: $("panel-link"),
+  panelSample: $("panel-sample"),
+  panelHistory: $("panel-history"),
+  panelSettings: $("panel-settings"),
+
+  // Link
+  pasteInput: $("paste-input"),
+  pasteGo: $("paste-go"),
+  statusMessage: $("status-message"),
+  batchCard: $("batch-card"),
+  batchSummary: $("batch-summary"),
+  batchFormatOptions: $("batch-format-options"),
+  trackInfo: $("track-info"),
+  thumbnail: $("thumbnail"),
+  trackTitle: $("track-title"),
+  trackMeta: $("track-meta"),
+  formatOptions: $("format-options"),
+  progress: $("progress"),
+  linkResultCard: $("link-result-card"),
+  queueSection: $("queue-section"),
+  queueSummary: $("queue-summary"),
+  queueList: $("queue-list"),
+  queueRetry: $("queue-retry"),
+  queueClearDone: $("queue-clear-done"),
+  queueClearAll: $("queue-clear-all"),
+
+  // File
+  fileInput: $("file-input"),
+  fileDropzone: $("file-dropzone"),
+  fileDropzoneTitle: $("file-dropzone-title"),
+  fileDropzoneSub: $("file-dropzone-sub"),
+  fileDropzoneFormats: $("file-dropzone-formats"),
+  fileClear: $("file-clear"),
+  fileFormatOptions: $("file-format-options"),
+  fileProgress: $("file-progress"),
+  fileResultCard: $("file-result-card"),
+
+  // Sample
+  sampleStatus: $("sample-status"),
+  sampleResult: $("sample-result"),
+  sampleAudio: $("sample-audio"),
+  sampleFormatOptions: $("sample-format-options"),
+  sampleProgress: $("sample-progress"),
+  sampleBtnDiscard: $("sample-btn-discard"),
+  sampleTimer: $("sample-timer"),
+  sampleRecordBtn: $("sample-record-btn"),
+  sampleWaveform: $("sample-waveform"),
+  sampleFilename: $("sample-filename"),
+  sampleBtnTrimSilence: $("sample-btn-trim-silence"),
+  sampleFadeIn: $("sample-fade-in"),
+  sampleFadeOut: $("sample-fade-out"),
+  sampleLevelMeter: $("sample-level-meter"),
+  sampleLevelFill: $("sample-level-fill"),
+  samplePlayBtn: $("sample-play-btn"),
+  sampleResultCard: $("sample-result-card"),
+
+  // History
+  historyList: $("history-list"),
+  historyEmpty: $("history-empty"),
+  historyClear: $("history-clear"),
+
+  // Settings
+  serverDot: $("settings-server-dot"),
+  settingsServerText: $("settings-server-text"),
+  settingsBtnRecheck: $("settings-btn-recheck"),
+  settingsBtnClearCache: $("settings-btn-clear-cache"),
+  settingNormalizeLink: $("setting-normalize-link"),
+  settingNormalizeSample: $("setting-normalize-sample"),
+  settingNormalizeFile: $("setting-normalize-file"),
+  settingTargetLufs: $("setting-target-lufs"),
+  settingSaveAs: $("setting-save-as"),
+  settingSubfolder: $("setting-subfolder"),
+  settingStartTab: $("setting-start-tab"),
+  settingPrefetch: $("setting-prefetch"),
+  settingTags: $("setting-tags"),
+  settingAnalyze: $("setting-analyze"),
+  settingDeleteOriginal: $("setting-delete-original"),
+  settingCloseTunebat: $("setting-close-tunebat"),
+  settingNameSeparator: $("setting-name-separator"),
+  settingNameCustom: $("setting-name-custom"),
+  nameCustomRow: $("name-custom-row"),
+  nameUsed: $("name-used"),
+  nameAvailable: $("name-available"),
+  namePreview: $("name-preview"),
+  tabsList: $("tabs-list"),
+  formatChips: $("format-chips"),
+  recordingShortcut: $("recording-shortcut"),
+  btnShortcuts: $("btn-shortcuts"),
+  ytdlpStatus: $("ytdlp-status"),
+  btnYtdlpUpdate: $("btn-ytdlp-update"),
+  appVersion: $("app-version"),
 };
 
 // Fills `container` with one button per format. Picking a format calls `onPick(id)`.
@@ -133,7 +150,7 @@ function createFormatGrid(container, onPick) {
 }
 
 function applyVisibleFormats(ids) {
-  for (const grid of [linkGrid, sampleGrid, fileGrid]) grid.setVisible(ids);
+  for (const grid of [linkGrid, sampleGrid, fileGrid, batchGrid]) grid.setVisible(ids);
 }
 
 const linkGrid = createFormatGrid(els.formatOptions, (id) => handleDownload(id));
@@ -143,4 +160,56 @@ const fileGrid = createFormatGrid(els.fileFormatOptions, (id) => handleFileConve
 
 function sendToBackground(message) {
   return chrome.runtime.sendMessage(message);
+}
+
+// --- Drag & drop reordering (Settings: tabs, file-name blocks) ---
+// Makes the children of each container in `containers` draggable between those containers.
+// `onChange()` fires after every drop; items keep a `data-id`. Dropping onto a container's
+// empty space appends; onto an item, inserts before it.
+function makeSortable(containers, onChange) {
+  let dragged = null;
+
+  for (const container of containers) {
+    container.addEventListener("dragover", (e) => {
+      if (!dragged) return;
+      e.preventDefault();
+      container.classList.add("drag-over");
+      const after = [...container.children].find((child) => {
+        if (child === dragged) return false;
+        const box = child.getBoundingClientRect();
+        // Same row (chips wrap): compare horizontally; stacked rows (list): vertically.
+        const stacked = getComputedStyle(container).flexDirection === "column" || container.tagName === "UL";
+        return stacked ? e.clientY < box.top + box.height / 2 : e.clientY < box.bottom && e.clientX < box.left + box.width / 2;
+      });
+      if (after) container.insertBefore(dragged, after);
+      else container.appendChild(dragged);
+    });
+    container.addEventListener("dragleave", (e) => {
+      if (!container.contains(e.relatedTarget)) container.classList.remove("drag-over");
+    });
+    container.addEventListener("drop", (e) => {
+      e.preventDefault();
+      for (const c of containers) c.classList.remove("drag-over");
+      onChange();
+    });
+  }
+
+  return {
+    // Call for every item added to a container (also after re-rendering).
+    attach(item) {
+      item.draggable = true;
+      item.addEventListener("dragstart", (e) => {
+        dragged = item;
+        item.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", item.dataset.id || ""); // Firefox needs data to start a drag
+      });
+      item.addEventListener("dragend", () => {
+        item.classList.remove("dragging");
+        dragged = null;
+        for (const c of containers) c.classList.remove("drag-over");
+        onChange(); // also covers a drop that landed outside every container
+      });
+    },
+  };
 }
