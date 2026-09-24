@@ -41,6 +41,7 @@ const els = {
   settingSubfolder: document.getElementById("setting-subfolder"),
   settingStartTab: document.getElementById("setting-start-tab"),
   settingPrefetch: document.getElementById("setting-prefetch"),
+  formatChips: document.getElementById("format-chips"),
   appVersion: document.getElementById("app-version"),
   settingsServerText: document.getElementById("settings-server-text"),
   settingsBtnRecheck: document.getElementById("settings-btn-recheck"),
@@ -98,7 +99,21 @@ function createFormatGrid(container, onPick) {
         button.disabled = activeId !== null;
       }
     },
+    // Show only these formats (Settings > Formats shown); columns shrink to fit.
+    setVisible(ids) {
+      let count = 0;
+      for (const [id, button] of buttons) {
+        const shown = ids.includes(id);
+        button.classList.toggle("hidden", !shown);
+        if (shown) count++;
+      }
+      container.style.setProperty("--cols", String(Math.max(1, Math.min(3, count))));
+    },
   };
+}
+
+function applyVisibleFormats(ids) {
+  for (const grid of [linkGrid, sampleGrid, fileGrid]) grid.setVisible(ids);
 }
 
 const linkGrid = createFormatGrid(els.formatOptions, (id) => handleDownload(id));
@@ -168,6 +183,7 @@ function setServerAlert(down) {
 
 async function main() {
   els.btnTunebat.addEventListener("click", makeTunebatHandler(els.btnTunebat, els.progress));
+  getSettings().then((settings) => applyVisibleFormats(settings.formats));
   initFileTab();
   initSampleTab();
   initSettingsTab();
@@ -1055,6 +1071,7 @@ const SETTING_KEYS = {
   subfolder: "settings.subfolder",
   startTab: "settings.startTab",
   prefetch: "settings.prefetch",
+  formats: "settings.formats",
 };
 const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
 
@@ -1075,7 +1092,15 @@ async function getSettings() {
     subfolder: items[SETTING_KEYS.subfolder] ?? "",
     startTab: items[SETTING_KEYS.startTab] ?? "last",
     prefetch: items[SETTING_KEYS.prefetch] ?? true,
+    formats: validFormatIds(items[SETTING_KEYS.formats]),
   };
+}
+
+// Saved list of visible formats, cleaned up: unknown ids dropped, never empty.
+function validFormatIds(saved) {
+  const all = FORMATS.map((f) => f.id);
+  const ids = Array.isArray(saved) ? all.filter((id) => saved.includes(id)) : all;
+  return ids.length ? ids : all;
 }
 
 // What the server needs to know about volume normalization for one category.
@@ -1121,6 +1146,31 @@ async function startDownload(url, filename) {
   }
 }
 
+// One toggle chip per format; at least one must stay on. Changes apply to the grids at once.
+function buildFormatChips(selected) {
+  const chips = new Map();
+  for (const format of FORMATS) {
+    const label = document.createElement("label");
+    label.className = "chip";
+    label.title = format.title;
+    label.innerHTML = '<input type="checkbox" /><span></span>';
+    label.querySelector("span").textContent = format.label;
+    const input = label.querySelector("input");
+    input.checked = selected.includes(format.id);
+    input.addEventListener("change", () => {
+      const ids = FORMATS.map((f) => f.id).filter((id) => chips.get(id).checked);
+      if (!ids.length) {
+        input.checked = true; // keep at least one format available
+        return;
+      }
+      chrome.storage.local.set({ [SETTING_KEYS.formats]: ids });
+      applyVisibleFormats(ids);
+    });
+    chips.set(format.id, input);
+    els.formatChips.appendChild(label);
+  }
+}
+
 async function initSettingsTab() {
   const settings = await getSettings();
 
@@ -1132,6 +1182,7 @@ async function initSettingsTab() {
   els.settingSubfolder.value = settings.subfolder;
   els.settingStartTab.value = settings.startTab;
   els.settingPrefetch.checked = settings.prefetch;
+  buildFormatChips(settings.formats);
 
   const checkbox = (el) => () => el.checked;
   const value = (el) => () => el.value;
