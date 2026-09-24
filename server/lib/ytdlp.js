@@ -70,6 +70,56 @@ function findCachedSource(downloadsDir, safeId) {
   return found ? path.join(downloadsDir, found) : null;
 }
 
+function runFfprobe(args) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("ffprobe", args, { stdio: ["ignore", "pipe", "ignore"] });
+    let stdout = "";
+    proc.stdout.on("data", (c) => (stdout += c));
+    proc.on("error", reject);
+    proc.on("close", (code) => (code === 0 ? resolve(stdout) : reject(new Error("ffprobe failed"))));
+  });
+}
+
+// --- Output formats ---------------------------------------------------------------------
+// Kept in sync with FORMATS in extension/popup.js. `hiRes` = the encoder gets a 24-bit
+// variant when the source itself is 24-bit (so converting a 24-bit WAV to WAV/AIFF/FLAC
+// doesn't silently drop to 16-bit); lossy sources always produce 16-bit.
+const FORMATS = {
+  mp3: { args: () => ["-codec:a", "libmp3lame", "-b:a", "320k"] },
+  wav: { hiRes: true, args: (hi) => ["-codec:a", hi ? "pcm_s24le" : "pcm_s16le"] },
+  flac: {
+    hiRes: true,
+    args: (hi) => ["-codec:a", "flac", ...(hi ? ["-sample_fmt", "s32", "-bits_per_raw_sample", "24"] : ["-sample_fmt", "s16"])],
+  },
+  aiff: { hiRes: true, args: (hi) => ["-codec:a", hi ? "pcm_s24be" : "pcm_s16be"] },
+  m4a: { args: () => ["-codec:a", "aac", "-b:a", "320k"] },
+  opus: { args: () => ["-codec:a", "libopus", "-b:a", "192k"] },
+};
+
+function isSupportedFormat(format) {
+  return Object.prototype.hasOwnProperty.call(FORMATS, format);
+}
+
+// True when the source's samples are 24-bit or wider PCM/FLAC. Lossy codecs (mp3, aac,
+// opus, vorbis) decode to float but report no bit depth, so they correctly come out false.
+// If ffprobe is missing or fails we just fall back to 16-bit.
+async function isHiResSource(sourcePath) {
+  try {
+    const out = await runFfprobe([
+      "-v", "error", "-select_streams", "a:0",
+      "-show_entries", "stream=codec_name,bits_per_raw_sample,bits_per_sample",
+      "-of", "json", sourcePath,
+    ]);
+    const stream = JSON.parse(out).streams?.[0];
+    if (!stream) return false;
+    const raw = Number(stream.bits_per_raw_sample) || 0;
+    const pcmBits = String(stream.codec_name).startsWith("pcm_") ? Number(stream.bits_per_sample) || 0 : 0;
+    return Math.max(raw, pcmBits) >= 24;
+  } catch {
+    return false;
+  }
+}
+
 // --- Metadata (yt-dlp extraction) --------------------------------------------------
 // Extraction is the slow part of any yt-dlp call (~3-5s: page + player + JS challenge),
 // while the actual audio download is under a second. So the full info JSON is saved
@@ -234,6 +284,7 @@ async function loudnessFilter(sourcePath, options) {
 // used by the Sample tab's waveform trim handles. Loudness is normalized unless
 // `options.loudnorm === false` (Settings toggle).
 async function convertToFormat(sourcePath, format, downloadsDir, safeId, options = {}) {
+  if (!isSupportedFormat(format)) throw new Error("Format neacceptat.");
   const targetPath = path.join(downloadsDir, `${safeId}.${format}`);
   if (fs.existsSync(targetPath)) return targetPath;
 
@@ -247,11 +298,9 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
       if (filter) args.push("-af", filter);
     }
 
-    if (format === "mp3") {
-      args.push("-codec:a", "libmp3lame", "-b:a", "320k");
-    } else {
-      args.push("-codec:a", "pcm_s16le");
-    }
+    const spec = FORMATS[format];
+    const hiRes = spec.hiRes ? await isHiResSource(sourcePath) : false;
+    args.push(...spec.args(hiRes));
 
     // Encode to a temp name and rename on success: ffmpeg creates its output file
     // immediately, so a failed/interrupted run would otherwise leave a truncated
@@ -283,8 +332,8 @@ function outputIdFor(safeId, convertOptions) {
 // and each final format (per `id`) — a request for the other format on the same
 // track reuses the source already downloaded.
 async function downloadAudio(url, format, downloadsDir, id, extraArgs = [], convertOptions = {}) {
-  if (format !== "mp3" && format !== "wav") {
-    throw new Error("Format neacceptat. Folosește mp3 sau wav.");
+  if (!isSupportedFormat(format)) {
+    throw new Error("Format neacceptat.");
   }
 
   const safeId = id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -321,6 +370,7 @@ module.exports = {
   analyze,
   saveInfo,
   prepare,
+  isSupportedFormat,
   downloadAudio,
   convertToFormat,
 };

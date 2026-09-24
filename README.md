@@ -7,7 +7,7 @@ Extensie Chrome + server local pentru descărcarea instrumentalelor pe care ți 
 **Faza 3 (gata):** Instagram — Story, Reel și Post, cu autentificare din Chrome (vezi mai jos).
 **Faza 4 (gata):** tab „Sample" — înregistrează audio-ul care redă din tab-ul curent (ex. un beat pe care clientul ți-l cântă live într-un apel video), apoi descarcă-l ca MP3 320kbps sau WAV.
 
-Extensia are trei tab-uri principale: **File** (alegi/tragi un fișier audio local și îl trimiți în Tunebat), **Link** (fluxul YouTube/Spotify/Instagram de mai sus — tab-ul implicit) și **Sample** (înregistrare directă din tab), plus **Settings**. Detecția de BPM/Key nu mai e integrată în extensie (rezultate inconsistente) — în schimb, după ce o piesă e efectiv descărcată, apare un buton **„Analyze BPM & Key on Tunebat"** care deschide [tunebat.com/Analyzer](https://tunebat.com/Analyzer) într-un tab nou cu **fișierul deja inserat automat** acolo.
+Extensia are trei tab-uri principale: **File** (alegi/tragi un fișier audio local, îl convertești în alt format sau îl trimiți în Tunebat), **Link** (fluxul YouTube/Spotify/Instagram de mai sus — tab-ul implicit) și **Sample** (înregistrare directă din tab), plus **Settings**. Detecția de BPM/Key nu mai e integrată în extensie (rezultate inconsistente) — în schimb, după ce o piesă e efectiv descărcată, apare un buton **„Analyze BPM & Key on Tunebat"** care deschide [tunebat.com/Analyzer](https://tunebat.com/Analyzer) într-un tab nou cu **fișierul deja inserat automat** acolo.
 
 ## De ce ai nevoie de un server local
 
@@ -209,15 +209,32 @@ Pentru cazurile în care clientul nu-ți trimite un link, ci îți cântă/redă
 
 **De reținut:** cât timp înregistrezi, Chrome arată un indicator vizual (o iconiță) pe tab-ul capturat, ca să fie mereu clar când ceva e înregistrat.
 
-## Tab-ul File (fișier local → Tunebat)
+## Formate de export (Link, Sample și File)
 
-Pentru un instrumental pe care îl ai deja pe disc (trimis de client pe WhatsApp/mail/Drive):
+Toate cele trei tab-uri au aceeași grilă de butoane, un click = un fișier:
+
+| Buton | Format |
+|---|---|
+| MP3 | MP3 320 kbps CBR |
+| WAV | PCM necomprimat |
+| FLAC | compresie lossless |
+| AIFF | PCM necomprimat (Logic/Pro Tools/Mac) |
+| M4A | AAC 320 kbps |
+| OPUS | Opus 192 kbps |
+
+Doar butonul apăsat afișează spinner cât se convertește; restul se estompează. **WAV, FLAC și AIFF păstrează 24-bit** dacă sursa e 24-bit (ex. un WAV 24-bit primit de la client); sursele lossy (YouTube, MP3, AAC, Opus) ies pe 16-bit, fiindcă 24-bit acolo n-ar aduce nimic. Frecvența de eșantionare se păstrează (MP3 și Opus se aduc automat la o frecvență suportată, ex. 96 kHz → 48 kHz). Pregătirea în fundal (vezi „Viteza descărcării") face din start MP3 și WAV; celelalte formate se convertesc la click din sursa deja descărcată, de obicei în 1-3 s.
+
+## Tab-ul File (conversie + Tunebat)
+
+Pentru un fișier pe care îl ai deja pe disc (trimis de client pe WhatsApp/mail/Drive):
 
 1. Deschide extensia → tab-ul **File**
-2. Trage fișierul în zonă (drag & drop) **sau** click în zonă și alege-l din file explorer — formate acceptate: MP3, WAV, FLAC, AAC, OGG, M4A (exact cele pe care le primește Tunebat), maxim 100 MB
-3. Butonul **„Analyze BPM & Key on Tunebat"** apare abia după ce ai ales un fișier — click pe el deschide Tunebat cu fișierul deja inserat.
+2. Trage fișierul în zonă (drag & drop) **sau** click în zonă și alege-l din file explorer — MP3, WAV, FLAC, AIFF, M4A, AAC, OGG sau OPUS, maxim 100 MB
+3. Apar grila de formate și butonul **„Analyze BPM & Key on Tunebat"** (ambele doar după ce ai ales un fișier)
+4. **Conversie**: click pe un format → fișierul se descarcă cu numele original și extensia nouă (ex. `Beat.wav` → `Beat.flac`). Fișierul se urcă pe serverul local o singură dată, deci mai multe formate la rând nu îl retrimit
+5. **Tunebat**: se deschide cu fișierul deja inserat. Tunebat nu acceptă AIFF/OPUS, așa că acestea se convertesc automat întâi în WAV (fără normalizare de volum)
 
-Fișierul se copiază pe serverul local (`POST /api/stash`, se șterge automat după 1 oră) doar în momentul click-ului pe Tunebat — popup-ul se închide imediat ce se deschide tab-ul Tunebat, deci service worker-ul trebuie să-l preia prin URL, exact ca la piesele descărcate. Nu se convertește și nu se descarcă nimic.
+Copia de pe server (`/api/stash`, `/api/convert-stash`) se șterge automat după 1 oră. Conversiile respectă setarea „Normalize volume" din Settings (implicit ON — dezactiv-o dacă vrei ca fișierul convertit să păstreze exact nivelul original).
 
 ## Tab-ul Settings
 

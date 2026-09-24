@@ -6,7 +6,7 @@ const fs = require("fs");
 const youtube = require("./lib/youtube");
 const instagram = require("./lib/instagram");
 const { resolveSpotifyToYoutube } = require("./lib/spotify");
-const { convertToFormat } = require("./lib/ytdlp");
+const { convertToFormat, isSupportedFormat } = require("./lib/ytdlp");
 
 // Picks the right platform module for a URL (YouTube, or a resolved-from-Spotify
 // YouTube URL, or Instagram Story/Reel/Post).
@@ -80,7 +80,7 @@ app.post(
   async (req, res) => {
     try {
       const format = req.query.format;
-      if (format !== "mp3" && format !== "wav") throw new Error("Format neacceptat.");
+      if (!isSupportedFormat(format)) throw new Error("Format neacceptat.");
       if (!req.body || !req.body.length) throw new Error("Lipsesc datele audio.");
 
       const safeId = `sample-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -112,7 +112,8 @@ app.post(
 // worker can fetch it back by URL (same path the downloaded tracks take to reach
 // Tunebat) — the popup itself closes as soon as the Tunebat tab opens, so it
 // can't hand the bytes over directly. No conversion: the file is served as-is.
-const STASH_EXTS = new Set(["mp3", "wav", "flac", "aac", "ogg", "m4a"]);
+const STASH_EXTS = new Set(["mp3", "wav", "flac", "aac", "ogg", "m4a", "aiff", "aif", "opus"]);
+const STASH_NAME_RE = /^stash-\d+-[a-z0-9]+\.[a-z0-9]+$/i;
 app.post(
   "/api/stash",
   express.raw({ type: "*/*", limit: "100mb" }),
@@ -130,6 +131,30 @@ app.post(
     }
   }
 );
+
+// Converts a file previously stored with /api/stash (File tab) into any supported format.
+// The stash is uploaded once and can be converted to several formats without re-uploading.
+app.post("/api/convert-stash", async (req, res) => {
+  try {
+    const { stash, format, loudnorm } = req.body || {};
+    if (!isSupportedFormat(format)) throw new Error("Format neacceptat.");
+    if (typeof stash !== "string" || !STASH_NAME_RE.test(stash)) throw new Error("Fișier invalid.");
+
+    const sourcePath = path.join(DOWNLOADS_DIR, stash);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error("Fișierul a expirat de pe server — alege-l din nou.");
+    }
+
+    // "conv-" prefix: the output must never share a name with the stash file itself
+    // (e.g. converting a stashed .wav to .wav).
+    const outputId = `conv-${stash.replace(/\.[^.]+$/, "")}${loudnorm === false ? "-raw" : ""}`;
+    const filePath = await convertToFormat(sourcePath, format, DOWNLOADS_DIR, outputId, { loudnorm });
+    const filename = path.basename(filePath);
+    res.json({ downloadUrl: `/files/${encodeURIComponent(filename)}`, filename });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 // Serve the converted files so the extension can trigger a native browser download.
 app.get("/files/:filename", (req, res) => {

@@ -25,7 +25,7 @@
 
     <main id="content">
       <div id="panel-file" class="hidden">
-        <input id="file-input" type="file" class="hidden" accept=".mp3,.wav,.flac,.aac,.ogg,.m4a,audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,audio/mp4" />
+        <input id="file-input" type="file" class="hidden" accept=".mp3,.wav,.flac,.aac,.ogg,.m4a,.aiff,.aif,.opus,audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,audio/mp4,audio/aiff,audio/x-aiff,audio/opus" />
 
         <div id="file-dropzone" role="button" tabindex="0" aria-label="Choose an audio file">
           <button id="file-clear" class="dropzone-clear hidden" aria-label="Remove file" title="Remove file">
@@ -41,8 +41,10 @@
           </svg>
           <p id="file-dropzone-title" class="dropzone-title">Drop an audio file here</p>
           <p id="file-dropzone-sub" class="meta">or click to browse</p>
-          <p id="file-dropzone-formats" class="meta">MP3 · WAV · FLAC · AAC · OGG · M4A</p>
+          <p id="file-dropzone-formats" class="meta">MP3 · WAV · FLAC · AIFF · M4A · OGG · OPUS</p>
         </div>
+
+        <div id="file-format-options" class="format-grid hidden"></div>
 
         <p id="file-progress" class="hidden"></p>
 
@@ -60,16 +62,7 @@
           </div>
         </div>
 
-        <div id="format-options" class="hidden">
-          <button id="btn-mp3" class="format-btn">
-            <span class="spinner"></span>
-            <span class="btn-label">MP3</span>
-          </button>
-          <button id="btn-wav" class="format-btn">
-            <span class="spinner"></span>
-            <span class="btn-label">WAV</span>
-          </button>
-        </div>
+        <div id="format-options" class="format-grid hidden"></div>
 
         <p id="progress" class="hidden"></p>
 
@@ -102,16 +95,7 @@
             <audio id="sample-audio" class="hidden"></audio>
           </div>
 
-          <div id="sample-format-options">
-            <button id="sample-btn-mp3" class="format-btn">
-              <span class="spinner"></span>
-              <span class="btn-label">MP3</span>
-            </button>
-            <button id="sample-btn-wav" class="format-btn">
-              <span class="spinner"></span>
-              <span class="btn-label">WAV</span>
-            </button>
-          </div>
+          <div id="sample-format-options" class="format-grid"></div>
 
           <p id="sample-progress" class="hidden"></p>
 
@@ -135,7 +119,7 @@
             <span>Normalize volume on export</span>
             <input type="checkbox" id="setting-loudnorm" checked />
           </label>
-          <p class="meta">Keeps every download/recording at a consistent perceived volume (ffmpeg loudnorm, -16 LUFS) instead of whatever level the source had.</p>
+          <p class="meta">Brings every download, recording and converted file to a consistent perceived volume (-16 LUFS) instead of whatever level the source had. Turn off to keep the original level.</p>
         </div>
 
         <div class="settings-section">
