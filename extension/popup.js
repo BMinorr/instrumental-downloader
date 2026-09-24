@@ -45,6 +45,8 @@ const els = {
   settingStartTab: document.getElementById("setting-start-tab"),
   settingPrefetch: document.getElementById("setting-prefetch"),
   formatChips: document.getElementById("format-chips"),
+  settingTags: document.getElementById("setting-tags"),
+  settingFileName: document.getElementById("setting-file-name"),
   tabHistory: document.getElementById("tab-history"),
   panelHistory: document.getElementById("panel-history"),
   historyList: document.getElementById("history-list"),
@@ -465,10 +467,11 @@ async function handleDownload(format) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
 
-    // Read the title now, not at click time: it may have been refined by the analysis.
-    const title = currentMedia?.url === url ? currentMedia.title : media.title;
-    const safeTitle = (title || "instrumental").replace(/[\\/:*?"<>|]/g, "_");
-    const filename = `${safeTitle}.${format}`;
+    // The server's answer carries the authoritative title/uploader (the analysis shown on
+    // screen may not have arrived yet); fall back to what's on screen.
+    const title = data.title || (currentMedia?.url === url ? currentMedia.title : media.title);
+    const { fileNameTemplate } = await getSettings();
+    const filename = `${buildFileName(fileNameTemplate, { title, uploader: data.uploader })}.${format}`;
     const fileUrl = `${SERVER}${data.downloadUrl}`;
 
     const downloadId = await startDownload(fileUrl, filename, {
@@ -1259,6 +1262,8 @@ const SETTING_KEYS = {
   startTab: "settings.startTab",
   prefetch: "settings.prefetch",
   formats: "settings.formats",
+  tags: "settings.tags",
+  fileNameTemplate: "settings.fileNameTemplate",
 };
 const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
 
@@ -1280,6 +1285,8 @@ async function getSettings() {
     startTab: items[SETTING_KEYS.startTab] ?? "last",
     prefetch: items[SETTING_KEYS.prefetch] ?? true,
     formats: validFormatIds(items[SETTING_KEYS.formats]),
+    tags: items[SETTING_KEYS.tags] ?? true,
+    fileNameTemplate: items[SETTING_KEYS.fileNameTemplate] || "{title}",
   };
 }
 
@@ -1293,7 +1300,12 @@ function validFormatIds(saved) {
 // What the server needs to know about volume normalization for one category.
 async function getNormalizeOptions(category) {
   const settings = await getSettings();
-  return { loudnorm: settings.normalize[category], targetLufs: settings.targetLufs };
+  return {
+    loudnorm: settings.normalize[category],
+    targetLufs: settings.targetLufs,
+    // Tags + cover art are written by the server for Link downloads only (it has the info).
+    ...(category === "link" ? { tags: settings.tags } : {}),
+  };
 }
 
 // Options sent with an analyze request: the server prepares MP3 + WAV in the background
@@ -1303,8 +1315,24 @@ async function getAnalyzeOptions() {
   return {
     loudnorm: settings.normalize.link,
     targetLufs: settings.targetLufs,
+    tags: settings.tags,
     prefetch: settings.prefetch,
   };
+}
+
+// Builds the saved file's name (without extension) from the "File name" setting.
+// `{title}` and `{uploader}`; separators left dangling by an empty value ("{uploader} - {title}"
+// with no uploader) are trimmed, and characters Windows/macOS don't allow become "_".
+function buildFileName(template, values) {
+  const name = String(template || "{title}")
+    .replace(/\{(title|uploader)\}/g, (_, key) => values[key] || "")
+    .replace(/\(\s*\)|\[\s*\]/g, "") // brackets left empty by a missing value
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–_.]+|[\s\-–_.]+$/g, "")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .slice(0, 150)
+    .trim();
+  return name || "instrumental";
 }
 
 // "Instrumentals/Client A" -> safe relative path inside the downloads folder ("" if empty).
@@ -1438,6 +1466,8 @@ async function initSettingsTab() {
   els.settingSubfolder.value = settings.subfolder;
   els.settingStartTab.value = settings.startTab;
   els.settingPrefetch.checked = settings.prefetch;
+  els.settingTags.checked = settings.tags;
+  els.settingFileName.value = settings.fileNameTemplate === "{title}" ? "" : settings.fileNameTemplate;
   buildFormatChips(settings.formats);
 
   const checkbox = (el) => () => el.checked;
@@ -1451,6 +1481,8 @@ async function initSettingsTab() {
     [els.settingSubfolder, SETTING_KEYS.subfolder, "input", () => els.settingSubfolder.value.trim()],
     [els.settingStartTab, SETTING_KEYS.startTab, "change", value(els.settingStartTab)],
     [els.settingPrefetch, SETTING_KEYS.prefetch, "change", checkbox(els.settingPrefetch)],
+    [els.settingTags, SETTING_KEYS.tags, "change", checkbox(els.settingTags)],
+    [els.settingFileName, SETTING_KEYS.fileNameTemplate, "input", () => els.settingFileName.value.trim() || "{title}"],
   ];
   for (const [el, key, eventName, read] of bindings) {
     el.addEventListener(eventName, () => chrome.storage.local.set({ [key]: read() }));

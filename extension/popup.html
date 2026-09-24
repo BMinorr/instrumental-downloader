@@ -186,7 +186,15 @@
             <span>Subfolder</span>
             <input id="setting-subfolder" type="text" class="settings-input" placeholder="e.g. Instrumentals" spellcheck="false" />
           </div>
-          <p class="meta">Files go to your Chrome downloads folder, inside this subfolder if set.</p>
+          <div class="settings-row">
+            <span>File name</span>
+            <input id="setting-file-name" type="text" class="settings-input" placeholder="{title}" spellcheck="false" />
+          </div>
+          <label class="settings-row">
+            <span>Tags &amp; cover art</span>
+            <span class="switch"><input type="checkbox" id="setting-tags" /><span class="switch-track"></span></span>
+          </label>
+          <p class="meta">Files go to your Chrome downloads folder, inside the subfolder if set. Name pattern: <code>{title}</code> and <code>{uploader}</code>, e.g. <code>{uploader} - {title}</code>. Tags (title, artist, source link) and the video's picture as cover art are added to Link downloads.</p>
         </section>
 
         <section class="settings-section">

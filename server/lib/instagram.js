@@ -65,4 +65,8 @@ async function downloadAudio(url, format, downloadsDir, convertOptions) {
   }
 }
 
-module.exports = { isValidInstagramUrl, extractInstagramId, analyze, prepare, downloadAudio };
+function savedMeta(url, downloadsDir) {
+  return ytdlp.savedMeta(downloadsDir, extractInstagramId(url));
+}
+
+module.exports = { isValidInstagramUrl, extractInstagramId, analyze, prepare, downloadAudio, savedMeta };

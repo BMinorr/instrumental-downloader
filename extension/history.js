@@ -165,7 +165,8 @@ async function historyConvert(entry, format, grid, setStatus) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
-    const base = (entry.title || "instrumental").replace(/[\\/:*?"<>|]/g, "_");
+    const { fileNameTemplate } = await getSettings();
+    const base = buildFileName(fileNameTemplate, { title: data.title || entry.title, uploader: data.uploader });
     const downloadId = await startDownload(`${SERVER}${data.downloadUrl}`, `${base}.${format}`, {
       source: "link",
       title: entry.title,

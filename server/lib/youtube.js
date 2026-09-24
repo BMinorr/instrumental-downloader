@@ -38,4 +38,8 @@ async function downloadAudio(url, format, downloadsDir, convertOptions) {
   return ytdlp.downloadAudio(url, format, downloadsDir, extractVideoId(url), [], convertOptions);
 }
 
-module.exports = { isValidYoutubeUrl, extractVideoId, analyze, prepare, downloadAudio };
+function savedMeta(url, downloadsDir) {
+  return ytdlp.savedMeta(downloadsDir, extractVideoId(url));
+}
+
+module.exports = { isValidYoutubeUrl, extractVideoId, analyze, prepare, downloadAudio, savedMeta };

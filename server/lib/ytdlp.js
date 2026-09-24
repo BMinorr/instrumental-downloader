@@ -84,15 +84,24 @@ function runFfprobe(args) {
 // Kept in sync with FORMATS in extension/popup.js. `hiRes` = the encoder gets a 24-bit
 // variant when the source itself is 24-bit (so converting a 24-bit WAV to WAV/AIFF/FLAC
 // doesn't silently drop to 16-bit); lossy sources always produce 16-bit.
+// `cover` = the container can carry cover art; `tagArgs` = extra muxer flags needed only
+// when writing tags. (WAV takes text tags in its INFO chunk but no picture; Opus takes
+// tags only — ffmpeg can't attach a picture to Ogg.)
 const FORMATS = {
-  mp3: { args: () => ["-codec:a", "libmp3lame", "-b:a", "320k"] },
+  mp3: { cover: true, tagArgs: ["-id3v2_version", "3"], args: () => ["-codec:a", "libmp3lame", "-b:a", "320k"] },
   wav: { hiRes: true, args: (hi) => ["-codec:a", hi ? "pcm_s24le" : "pcm_s16le"] },
   flac: {
+    cover: true,
     hiRes: true,
     args: (hi) => ["-codec:a", "flac", ...(hi ? ["-sample_fmt", "s32", "-bits_per_raw_sample", "24"] : ["-sample_fmt", "s16"])],
   },
-  aiff: { hiRes: true, args: (hi) => ["-codec:a", hi ? "pcm_s24be" : "pcm_s16be"] },
-  m4a: { args: () => ["-codec:a", "aac", "-b:a", "320k"] },
+  aiff: {
+    cover: true,
+    hiRes: true,
+    tagArgs: ["-write_id3v2", "1", "-id3v2_version", "3"],
+    args: (hi) => ["-codec:a", hi ? "pcm_s24be" : "pcm_s16be"],
+  },
+  m4a: { cover: true, args: () => ["-codec:a", "aac", "-b:a", "320k"] },
   opus: { args: () => ["-codec:a", "libopus", "-b:a", "192k"] },
 };
 
@@ -315,6 +324,49 @@ async function loudnessFilter(sourcePath, options) {
   return `volume=${gainDb.toFixed(2)}dB,alimiter=limit=${LIMITER_CEILING}:level=0`;
 }
 
+// --- Tags + cover art (Link downloads) ------------------------------------------------
+// The saved info JSON already has everything: title, uploader, source page and thumbnail.
+// Cover = the thumbnail, center-cropped to a square (album-art shape) as a 600px JPEG.
+
+async function ensureCover(downloadsDir, id, info) {
+  const coverPath = path.join(downloadsDir, `${id}.cover.jpg`);
+  if (fs.existsSync(coverPath)) return coverPath;
+  const thumbnail = info?.thumbnail;
+  if (typeof thumbnail !== "string" || !/^https?:\/\//i.test(thumbnail)) return null;
+
+  return dedupe(`cover:${id}`, async () => {
+    if (fs.existsSync(coverPath)) return coverPath;
+    const partial = path.join(downloadsDir, `${id}.cover.partial.jpg`);
+    try {
+      await runFfmpeg([
+        "-y", "-protocol_whitelist", "http,https,tls,tcp,crypto",
+        "-i", thumbnail,
+        "-vf", "crop='min(iw,ih)':'min(iw,ih)',scale=600:600",
+        "-frames:v", "1", "-q:v", "3", partial,
+      ]);
+      fs.renameSync(partial, coverPath);
+      return coverPath;
+    } catch {
+      fs.rmSync(partial, { force: true });
+      return null; // cover art is a nicety — never fail the download over it
+    }
+  });
+}
+
+async function taggingFor(url, downloadsDir, id, options = {}) {
+  if (options.tags === false || !id) return {};
+  const info = readSavedInfo(downloadsDir, id);
+  if (!info) return {};
+  const meta = { title: info.title, artist: info.uploader || info.channel, comment: info.webpage_url || url };
+  return { meta, coverPath: await ensureCover(downloadsDir, id, info) };
+}
+
+// Title + uploader of an already-analyzed track (the popup names the file with these).
+function savedMeta(downloadsDir, id) {
+  const info = readSavedInfo(downloadsDir, id);
+  return info ? { title: info.title, uploader: info.uploader || info.channel || "" } : null;
+}
+
 // `options.trimStart`/`options.trimEnd` (seconds) cut the clip before encoding —
 // used by the Sample tab's waveform trim handles. Loudness is normalized unless
 // `options.loudnorm === false` (Settings toggle).
@@ -326,7 +378,15 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
   return dedupe(`convert:${targetPath}`, async () => {
     if (fs.existsSync(targetPath)) return targetPath;
 
-    const args = ["-y", "-i", sourcePath, "-vn"];
+    const spec = FORMATS[format];
+    const withCover = !!(spec.cover && options.coverPath && fs.existsSync(options.coverPath));
+    const args = ["-y", "-i", sourcePath];
+    if (withCover) {
+      // Two inputs: the audio, and the cover image copied in as an "attached picture".
+      args.push("-i", options.coverPath, "-map", "0:a:0", "-map", "1:v:0", "-c:v", "copy", "-disposition:v:0", "attached_pic");
+    } else {
+      args.push("-vn");
+    }
 
     const filters = editFilters(options);
     if (options.loudnorm !== false) {
@@ -335,9 +395,14 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
     }
     if (filters.length) args.push("-af", filters.join(","));
 
-    const spec = FORMATS[format];
     const hiRes = spec.hiRes ? await isHiResSource(sourcePath) : false;
     args.push(...spec.args(hiRes));
+    if (options.meta) {
+      for (const [key, value] of Object.entries(options.meta)) {
+        if (value) args.push("-metadata", `${key}=${value}`);
+      }
+      if (spec.tagArgs) args.push(...spec.tagArgs);
+    }
 
     // Encode to a temp name and rename on success: ffmpeg creates its output file
     // immediately, so a failed/interrupted run would otherwise leave a truncated
@@ -362,9 +427,15 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
 // The cached output is named after how it was processed, so the cache never mixes up
 // the untouched version (`-raw`), the default -16 LUFS one (no suffix) and other targets.
 function outputIdFor(safeId, convertOptions = {}) {
-  if (convertOptions.loudnorm === false) return `${safeId}-raw`;
-  const target = targetLufsFor(convertOptions);
-  return target === DEFAULT_TARGET_LUFS ? safeId : `${safeId}-l${Math.abs(target)}`;
+  let id = safeId;
+  if (convertOptions.loudnorm === false) {
+    id += "-raw";
+  } else {
+    const target = targetLufsFor(convertOptions);
+    if (target !== DEFAULT_TARGET_LUFS) id += `-l${Math.abs(target)}`;
+  }
+  if (convertOptions.tags === false) id += "-nt"; // no tags / cover art
+  return id;
 }
 
 // Downloads + extracts audio in the requested format, caching both the raw source
@@ -384,7 +455,8 @@ async function downloadAudio(url, format, downloadsDir, id, extraArgs = [], conv
   }
 
   const sourcePath = await downloadRawSource(url, downloadsDir, id, safeId, extraArgs);
-  return convertToFormat(sourcePath, format, downloadsDir, outputId, convertOptions);
+  const tagging = await taggingFor(url, downloadsDir, id, convertOptions);
+  return convertToFormat(sourcePath, format, downloadsDir, outputId, { ...convertOptions, ...tagging });
 }
 
 // Runs right after a track is analyzed (fire-and-forget): the popup was just opened on
@@ -396,10 +468,9 @@ async function prepare(url, downloadsDir, id, extraArgs = [], convertOptions = {
   if (!id) return;
   const sourcePath = await downloadRawSource(url, downloadsDir, id, id, extraArgs);
   const outputId = outputIdFor(id, convertOptions);
+  const options = { ...convertOptions, ...(await taggingFor(url, downloadsDir, id, convertOptions)) };
   await Promise.all(
-    ["mp3", "wav"].map((format) =>
-      convertToFormat(sourcePath, format, downloadsDir, outputId, convertOptions)
-    )
+    ["mp3", "wav"].map((format) => convertToFormat(sourcePath, format, downloadsDir, outputId, options))
   );
 }
 
@@ -408,6 +479,7 @@ module.exports = {
   runFfmpeg,
   analyze,
   saveInfo,
+  savedMeta,
   prepare,
   isSupportedFormat,
   outputIdFor,

@@ -64,14 +64,14 @@ app.post("/api/ytdlp/update", async (req, res) => {
 
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { url, loudnorm, targetLufs, prefetch } = req.body || {};
+    const { url, loudnorm, targetLufs, tags, prefetch } = req.body || {};
     const handler = handlerFor(url);
     const info = await handler.analyze(url, DOWNLOADS_DIR);
     res.json(info);
     // The user just opened the popup on this link — start fetching + encoding now so
     // the MP3/WAV click has (almost) nothing left to wait for (Settings can turn this off).
     if (prefetch !== false) {
-      handler.prepare(url, DOWNLOADS_DIR, { loudnorm, targetLufs }).catch(() => {});
+      handler.prepare(url, DOWNLOADS_DIR, { loudnorm, targetLufs, tags }).catch(() => {});
     }
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -80,15 +80,19 @@ app.post("/api/analyze", async (req, res) => {
 
 app.post("/api/download", async (req, res) => {
   try {
-    const { url, format, loudnorm, targetLufs } = req.body || {};
-    const filePath = await handlerFor(url).downloadAudio(url, format, DOWNLOADS_DIR, {
+    const { url, format, loudnorm, targetLufs, tags } = req.body || {};
+    const handler = handlerFor(url);
+    const filePath = await handler.downloadAudio(url, format, DOWNLOADS_DIR, {
       loudnorm,
       targetLufs,
+      tags,
     });
     const filename = path.basename(filePath);
     res.json({
       downloadUrl: `/files/${encodeURIComponent(filename)}`,
       filename,
+      // Authoritative title/uploader (the popup builds the saved file's name from them).
+      ...(handler.savedMeta(url, DOWNLOADS_DIR) || {}),
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -97,11 +101,11 @@ app.post("/api/download", async (req, res) => {
 
 app.post("/api/spotify-resolve", async (req, res) => {
   try {
-    const { url, loudnorm, targetLufs, prefetch } = req.body || {};
+    const { url, loudnorm, targetLufs, tags, prefetch } = req.body || {};
     const result = await resolveSpotifyToYoutube(url, DOWNLOADS_DIR);
     res.json(result);
     if (prefetch !== false) {
-      youtube.prepare(result.youtube.url, DOWNLOADS_DIR, { loudnorm, targetLufs }).catch(() => {});
+      youtube.prepare(result.youtube.url, DOWNLOADS_DIR, { loudnorm, targetLufs, tags }).catch(() => {});
     }
   } catch (err) {
     res.status(400).json({ error: err.message });
