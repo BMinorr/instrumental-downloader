@@ -163,45 +163,89 @@ async function openInTunebat(fileUrl, filename) {
 
   const tab = await chrome.tabs.create({ url: TUNEBAT_URL });
 
-  // Bounded wait: if the tab never reports "complete" (slow network, blocked
-  // request, etc.) we'd otherwise hang here forever with the button stuck on
-  // "Opening Tunebat...". Fall through and attempt the injection anyway after
-  // the timeout — worst case it fails with a clear error instead of a silent hang.
-  const pageLoaded = Promise.race([
-    new Promise((resolve) => {
-      function onUpdated(tabId, info) {
-        if (tabId === tab.id && info.status === "complete") {
-          chrome.tabs.onUpdated.removeListener(onUpdated);
-          resolve();
-        }
-      }
-      chrome.tabs.onUpdated.addListener(onUpdated);
-    }),
-    new Promise((resolve) => setTimeout(resolve, 15000)),
-  ]);
+  try {
+    // Start polling first, then encode while the page loads: the polling requests are
+    // already in flight, so the (synchronous) encoding doesn't delay the wait.
+    const uploadReady = waitForTunebatUpload(tab.id, 15000);
+    const base64 = arrayBufferToBase64(buffer);
+    await uploadReady;
 
-  // Encoding a multi-MB file takes a moment — do it while the page loads instead of
-  // before/after (the "complete" listener above is already attached).
-  const base64 = arrayBufferToBase64(buffer);
-  await pageLoaded;
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      // MAIN world: constructs File/DataTransfer using the page's OWN realm, not the
+      // extension's isolated-world copies. If Tunebat's app does an `instanceof File`
+      // check (common in React file-drop handlers), an isolated-world File fails it
+      // silently — the event fires but the app just ignores the "file".
+      world: "MAIN",
+      func: injectFileIntoPage,
+      args: [base64, filename, AUDIO_MIME_TYPES],
+    });
 
-  // Give the page's own scripts a moment to finish mounting the upload widget.
-  await new Promise((r) => setTimeout(r, 1000));
-
-  const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    // MAIN world: constructs File/DataTransfer using the page's OWN realm, not the
-    // extension's isolated-world copies. If Tunebat's app does an `instanceof File`
-    // check (common in React file-drop handlers), an isolated-world File fails it
-    // silently — the event fires but the app just ignores the "file".
-    world: "MAIN",
-    func: injectFileIntoPage,
-    args: [base64, filename, AUDIO_MIME_TYPES],
-  });
-
-  if (!result?.ok) {
-    throw new Error(result?.reason || "Could not insert the file into Tunebat's page.");
+    if (!result?.ok) {
+      throw new Error(result?.reason || "Could not insert the file into Tunebat's page.");
+    }
+  } catch (err) {
+    // The popup is long gone by now (opening the tab closed it), so an error can't be
+    // shown there — put it on the Tunebat page itself instead.
+    await chrome.scripting
+      .executeScript({
+        target: { tabId: tab.id },
+        world: "MAIN",
+        func: showPageToast,
+        args: [`Couldn't add the file automatically (${err.message}). Drop it here manually.`],
+      })
+      .catch(() => {});
+    throw err;
   }
+}
+
+// Runs inside the Tunebat tab. Tunebat is a client-side rendered app (its HTML has no
+// upload widget at all), so the file input only exists once React has rendered it — and
+// React attaches its `__reactProps$…` bookkeeping to the element at that point, meaning
+// its change handlers are live. That happens well before the page's full "load" event
+// (which waits on ads/analytics), so we don't wait for "load" or use a fixed delay.
+// If a future React renames those keys, `readyState === "complete"` is the fallback.
+function tunebatUploadReady() {
+  if (!location.hostname.endsWith("tunebat.com")) return false;
+  const input = document.querySelector('input[type="file"]');
+  if (!input) return false;
+  return (
+    Object.keys(input).some((k) => k.startsWith("__reactProps$")) ||
+    document.readyState === "complete"
+  );
+}
+
+// Polls the freshly opened tab until the upload widget is ready. Errors are expected
+// while the tab hasn't navigated yet (nothing scriptable to inject into) — just retry.
+// Resolves false on timeout; the caller still tries the injection, which has its own
+// short wait for the input.
+async function waitForTunebatUpload(tabId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const [injection] = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: "MAIN",
+        func: tunebatUploadReady,
+      });
+      if (injection?.result) return true;
+    } catch {
+      // not navigated / not scriptable yet
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+
+function showPageToast(message) {
+  const toast = document.createElement("div");
+  toast.textContent = message;
+  toast.style.cssText =
+    "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;" +
+    "max-width:80vw;background:#1e2027;color:#f2f2f5;padding:10px 16px;border-radius:8px;" +
+    "font:13px -apple-system,Segoe UI,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.45)";
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 10000);
 }
 
 const AUDIO_MIME_TYPES = {
@@ -228,8 +272,8 @@ async function injectFileIntoPage(base64, filename, mimeTypes) {
     const ext = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
     const file = new File([bytes], filename, { type: mimeTypes[ext] || "audio/mpeg" });
 
-    // The widget normally exists by now (see the settle delay in openInTunebat), but
-    // on a slow page keep looking for a few seconds rather than failing outright.
+    // The widget normally exists by now (see waitForTunebatUpload), but on a slow
+    // page keep looking for a few seconds rather than failing outright.
     let inputs = document.querySelectorAll('input[type="file"]');
     for (let waited = 0; inputs.length === 0 && waited < 5000; waited += 200) {
       await new Promise((r) => setTimeout(r, 200));

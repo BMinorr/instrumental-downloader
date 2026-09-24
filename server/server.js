@@ -33,9 +33,13 @@ app.get("/health", (req, res) => {
 
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { url } = req.body || {};
-    const info = await handlerFor(url).analyze(url);
+    const { url, loudnorm } = req.body || {};
+    const handler = handlerFor(url);
+    const info = await handler.analyze(url, DOWNLOADS_DIR);
     res.json(info);
+    // The user just opened the popup on this link — start fetching + encoding now so
+    // the MP3/WAV click has (almost) nothing left to wait for.
+    handler.prepare(url, DOWNLOADS_DIR, { loudnorm }).catch(() => {});
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -57,9 +61,10 @@ app.post("/api/download", async (req, res) => {
 
 app.post("/api/spotify-resolve", async (req, res) => {
   try {
-    const { url } = req.body || {};
-    const result = await resolveSpotifyToYoutube(url);
+    const { url, loudnorm } = req.body || {};
+    const result = await resolveSpotifyToYoutube(url, DOWNLOADS_DIR);
     res.json(result);
+    youtube.prepare(result.youtube.url, DOWNLOADS_DIR, { loudnorm }).catch(() => {});
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

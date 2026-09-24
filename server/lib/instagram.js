@@ -37,15 +37,21 @@ function wrapAuthError(err) {
   return err;
 }
 
-async function analyze(url) {
+async function analyze(url, downloadsDir) {
   if (!isValidInstagramUrl(url)) {
     throw new Error("Link Instagram invalid. Trebuie să fie un Story, Reel sau Post.");
   }
   try {
-    return await ytdlp.analyze(url, AUTH_ARGS);
+    return await ytdlp.analyze(url, AUTH_ARGS, { downloadsDir, id: extractInstagramId(url) });
   } catch (err) {
     throw wrapAuthError(err);
   }
+}
+
+// Warms the cache in the background once a link has been analyzed (no-op for
+// "current story" links, which have no stable id to cache under).
+function prepare(url, downloadsDir, convertOptions) {
+  return ytdlp.prepare(url, downloadsDir, extractInstagramId(url), AUTH_ARGS, convertOptions);
 }
 
 async function downloadAudio(url, format, downloadsDir, convertOptions) {
@@ -59,4 +65,4 @@ async function downloadAudio(url, format, downloadsDir, convertOptions) {
   }
 }
 
-module.exports = { isValidInstagramUrl, extractInstagramId, analyze, downloadAudio };
+module.exports = { isValidInstagramUrl, extractInstagramId, analyze, prepare, downloadAudio };

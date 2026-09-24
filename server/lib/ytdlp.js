@@ -43,7 +43,7 @@ function runFfmpeg(args) {
       }
     });
     proc.on("close", (code) => {
-      if (code === 0) resolve();
+      if (code === 0) resolve({ stderr });
       else reject(new Error(stderr.trim() || `ffmpeg a eșuat cu codul ${code}`));
     });
   });
@@ -70,15 +70,52 @@ function findCachedSource(downloadsDir, safeId) {
   return found ? path.join(downloadsDir, found) : null;
 }
 
-async function analyze(url, extraArgs = []) {
-  const { stdout } = await runYtDlp([
-    "--dump-json",
-    "--no-playlist",
-    "--skip-download",
-    ...extraArgs,
-    url,
-  ]);
-  const info = JSON.parse(stdout.trim().split("\n").pop());
+// --- Metadata (yt-dlp extraction) --------------------------------------------------
+// Extraction is the slow part of any yt-dlp call (~3-5s: page + player + JS challenge),
+// while the actual audio download is under a second. So the full info JSON is saved
+// once per media id and reused: "analyze" writes it, the download loads it instead of
+// extracting again (`--load-info-json`), which removes the second extraction entirely.
+
+function infoPath(downloadsDir, id) {
+  return path.join(downloadsDir, `${id}.info.json`);
+}
+
+function saveInfo(downloadsDir, id, info) {
+  if (!id) return;
+  const tmp = `${infoPath(downloadsDir, id)}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(info));
+  fs.renameSync(tmp, infoPath(downloadsDir, id));
+}
+
+function readSavedInfo(downloadsDir, id) {
+  if (!id) return null;
+  try {
+    return JSON.parse(fs.readFileSync(infoPath(downloadsDir, id), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+async function getInfo(url, downloadsDir, id, extraArgs = []) {
+  return dedupe(`info:${id || url}`, async () => {
+    const saved = readSavedInfo(downloadsDir, id);
+    if (saved) return saved;
+
+    const { stdout } = await runYtDlp([
+      "--dump-json",
+      "--no-playlist",
+      "--skip-download",
+      ...extraArgs,
+      url,
+    ]);
+    const info = JSON.parse(stdout.trim().split("\n").pop());
+    saveInfo(downloadsDir, id, info);
+    return info;
+  });
+}
+
+async function analyze(url, extraArgs = [], { downloadsDir, id } = {}) {
+  const info = await getInfo(url, downloadsDir, id, extraArgs);
   return {
     title: info.title,
     duration: info.duration, // seconds
@@ -87,27 +124,44 @@ async function analyze(url, extraArgs = []) {
   };
 }
 
-// Descarcă audio-ul brut (fără reconversie) o singură dată per piesă și îl cache-uiește
-// separat de formatul final — dacă ceri mai târziu și celălalt format (mp3 după wav, sau
-// invers), conversia se face local din sursa deja descărcată, fără să mai bată net-ul.
-async function downloadRawSource(url, downloadsDir, safeId, extraArgs) {
+// Downloads the raw audio (no re-encode) once per track and caches it separately
+// from the final format — asking for the other format later converts locally from
+// the source already on disk, with no network.
+async function downloadRawSource(url, downloadsDir, id, safeId, extraArgs) {
   return dedupe(`source:${safeId}`, async () => {
     const existing = findCachedSource(downloadsDir, safeId);
     if (existing) return existing;
 
-    const outputTemplate = path.join(downloadsDir, `${safeId}.source.%(ext)s`);
-    const args = [
-      "--no-playlist",
-      "-f", "bestaudio/best",
-      "--concurrent-fragments", "4", // descarcă fragmentele DASH în paralel — mai rapid pe conexiuni bune
-      "-o", outputTemplate,
-      "--print", "after_move:filepath",
-      "--no-simulate",
-      ...extraArgs,
-      url,
-    ];
+    // With a saved info JSON the download skips extraction. If the saved URLs have
+    // gone stale (expired/blocked), drop it and fall back to a full extraction.
+    let fromInfo = false;
+    if (id) {
+      await getInfo(url, downloadsDir, id, extraArgs);
+      fromInfo = fs.existsSync(infoPath(downloadsDir, id));
+    }
 
-    const { stdout } = await runYtDlp(args);
+    const outputTemplate = path.join(downloadsDir, `${safeId}.source.%(ext)s`);
+    const run = (useInfo) =>
+      runYtDlp([
+        "--no-playlist",
+        "-f", "bestaudio/best",
+        "--concurrent-fragments", "4", // download DASH fragments in parallel
+        "-o", outputTemplate,
+        "--print", "after_move:filepath",
+        "--no-simulate",
+        ...extraArgs,
+        ...(useInfo ? ["--load-info-json", infoPath(downloadsDir, id)] : [url]),
+      ]);
+
+    let stdout;
+    try {
+      stdout = (await run(fromInfo)).stdout;
+    } catch (err) {
+      if (!fromInfo) throw err;
+      fs.rmSync(infoPath(downloadsDir, id), { force: true });
+      stdout = (await run(false)).stdout;
+    }
+
     const lines = stdout.trim().split("\n").filter(Boolean);
     let filePath = lines[lines.length - 1];
 
@@ -123,10 +177,62 @@ async function downloadRawSource(url, downloadsDir, safeId, extraArgs) {
   });
 }
 
+// --- Loudness normalization ---------------------------------------------------------
+// ffmpeg's `loudnorm` filter is accurate but slow (it oversamples for true-peak
+// detection): ~6-7s on a 3.5 minute track, longer than the MP3 encode itself. Instead
+// we measure integrated loudness once with the fast `ebur128` filter (~0.4s), then
+// apply that as a static gain plus a limiter at -1.5 dBFS. Same -16 LUFS target, but a
+// static gain also leaves the track's dynamics untouched (loudnorm's one-pass mode
+// rides the volume up and down), which matters for instrumentals going to mixing.
+
+const TARGET_LUFS = -16;
+const LIMITER_CEILING = 0.841; // -1.5 dBFS, linear
+
+const loudnessCache = new Map(); // "source|start|end" -> integrated LUFS (or null if unmeasurable)
+
+function trimArgs(options) {
+  const args = [];
+  if (typeof options.trimStart === "number" && options.trimStart > 0) {
+    args.push("-ss", options.trimStart.toFixed(2));
+  }
+  if (typeof options.trimEnd === "number") {
+    args.push("-to", options.trimEnd.toFixed(2));
+  }
+  return args;
+}
+
+async function measureLoudness(sourcePath, options = {}) {
+  const key = `${sourcePath}|${options.trimStart || 0}|${options.trimEnd ?? ""}`;
+  if (loudnessCache.has(key)) return loudnessCache.get(key);
+
+  return dedupe(`measure:${key}`, async () => {
+    const { stderr } = await runFfmpeg([
+      "-hide_banner", "-nostats",
+      "-i", sourcePath,
+      ...trimArgs(options),
+      "-vn",
+      "-af", "ebur128=framelog=quiet",
+      "-f", "null", "-",
+    ]);
+    // Summary block: "Integrated loudness:\n    I:         -13.0 LUFS"
+    const match = [...stderr.matchAll(/\bI:\s+(-?\d+(?:\.\d+)?)\s+LUFS/g)].pop();
+    const lufs = match ? Number(match[1]) : null;
+    loudnessCache.set(key, lufs);
+    return lufs;
+  });
+}
+
+async function loudnessFilter(sourcePath, options) {
+  const lufs = await measureLoudness(sourcePath, options);
+  // Silence / unmeasurable audio: leave it alone rather than applying a huge gain.
+  if (lufs === null || lufs < -60) return null;
+  const gainDb = Math.max(-30, Math.min(24, TARGET_LUFS - lufs));
+  return `volume=${gainDb.toFixed(2)}dB,alimiter=limit=${LIMITER_CEILING}:level=0`;
+}
+
 // `options.trimStart`/`options.trimEnd` (seconds) cut the clip before encoding —
-// used by the Sample tab's waveform trim handles. Loudness is normalized on every
-// conversion (EBU R128, -16 LUFS target) so instrumentals from different sources/
-// clients land at a consistent perceived volume instead of wildly different levels.
+// used by the Sample tab's waveform trim handles. Loudness is normalized unless
+// `options.loudnorm === false` (Settings toggle).
 async function convertToFormat(sourcePath, format, downloadsDir, safeId, options = {}) {
   const targetPath = path.join(downloadsDir, `${safeId}.${format}`);
   if (fs.existsSync(targetPath)) return targetPath;
@@ -134,18 +240,11 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
   return dedupe(`convert:${targetPath}`, async () => {
     if (fs.existsSync(targetPath)) return targetPath;
 
-    const args = ["-y", "-i", sourcePath];
+    const args = ["-y", "-i", sourcePath, ...trimArgs(options), "-vn"];
 
-    if (typeof options.trimStart === "number" && options.trimStart > 0) {
-      args.push("-ss", options.trimStart.toFixed(2));
-    }
-    if (typeof options.trimEnd === "number") {
-      args.push("-to", options.trimEnd.toFixed(2));
-    }
-
-    args.push("-vn");
     if (options.loudnorm !== false) {
-      args.push("-af", "loudnorm=I=-16:TP=-1.5:LRA=11");
+      const filter = await loudnessFilter(sourcePath, options);
+      if (filter) args.push("-af", filter);
     }
 
     if (format === "mp3") {
@@ -174,26 +273,54 @@ async function convertToFormat(sourcePath, format, downloadsDir, safeId, options
   });
 }
 
-// Descarcă + extrage audio în formatul cerut, cache-uind atât sursa brută cât și
-// fiecare format final (per `id`) — o cerere pentru celălalt format pe aceeași
-// piesă reutilizează sursa deja descărcată, fără re-descărcare.
-// `convertOptions.loudnorm: false` dă un id de output distinct (`-raw`), ca să nu
-// se confunde cache-ul cu varianta normalizată (implicită) a aceleiași piese.
+function outputIdFor(safeId, convertOptions) {
+  // `loudnorm: false` gets a distinct output id (`-raw`) so the cache never mixes up
+  // the normalized (default) and untouched versions of the same track.
+  return convertOptions.loudnorm === false ? `${safeId}-raw` : safeId;
+}
+
+// Downloads + extracts audio in the requested format, caching both the raw source
+// and each final format (per `id`) — a request for the other format on the same
+// track reuses the source already downloaded.
 async function downloadAudio(url, format, downloadsDir, id, extraArgs = [], convertOptions = {}) {
   if (format !== "mp3" && format !== "wav") {
     throw new Error("Format neacceptat. Folosește mp3 sau wav.");
   }
 
   const safeId = id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const outputId = convertOptions.loudnorm === false ? `${safeId}-raw` : safeId;
+  const outputId = outputIdFor(safeId, convertOptions);
   const targetPath = path.join(downloadsDir, `${outputId}.${format}`);
 
   if (fs.existsSync(targetPath)) {
     return targetPath;
   }
 
-  const sourcePath = await downloadRawSource(url, downloadsDir, safeId, extraArgs);
+  const sourcePath = await downloadRawSource(url, downloadsDir, id, safeId, extraArgs);
   return convertToFormat(sourcePath, format, downloadsDir, outputId, convertOptions);
 }
 
-module.exports = { runYtDlp, runFfmpeg, analyze, downloadAudio, convertToFormat };
+// Runs right after a track is analyzed (fire-and-forget): the popup was just opened on
+// this link, so the user is very likely about to pick MP3 or WAV. Getting the source and
+// both encodes done while they look at the screen makes the click near-instant. A click
+// that arrives mid-way shares these same in-flight jobs (see `dedupe`), never duplicates.
+// Tracks without a stable id (e.g. "current story" links) are skipped — nothing to reuse.
+async function prepare(url, downloadsDir, id, extraArgs = [], convertOptions = {}) {
+  if (!id) return;
+  const sourcePath = await downloadRawSource(url, downloadsDir, id, id, extraArgs);
+  const outputId = outputIdFor(id, convertOptions);
+  await Promise.all(
+    ["mp3", "wav"].map((format) =>
+      convertToFormat(sourcePath, format, downloadsDir, outputId, convertOptions)
+    )
+  );
+}
+
+module.exports = {
+  runYtDlp,
+  runFfmpeg,
+  analyze,
+  saveInfo,
+  prepare,
+  downloadAudio,
+  convertToFormat,
+};

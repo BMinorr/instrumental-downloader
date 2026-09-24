@@ -17,21 +17,25 @@ function extractVideoId(url) {
   return match ? match[1] : null;
 }
 
-async function analyze(url) {
+async function analyze(url, downloadsDir) {
   if (!isValidYoutubeUrl(url)) {
     throw new Error("Link YouTube invalid.");
   }
-  return ytdlp.analyze(url);
+  return ytdlp.analyze(url, [], { downloadsDir, id: extractVideoId(url) });
+}
+
+// Warms the cache in the background (source + encodes) once a link has been analyzed.
+function prepare(url, downloadsDir, convertOptions) {
+  return ytdlp.prepare(url, downloadsDir, extractVideoId(url), [], convertOptions);
 }
 
 async function downloadAudio(url, format, downloadsDir, convertOptions) {
   if (!isValidYoutubeUrl(url)) {
     throw new Error("Link YouTube invalid.");
   }
-  // Deterministic filename (per video + format) so a BPM/key analysis and a later
-  // download of the same video can reuse the same extracted audio instead of
-  // re-downloading from YouTube.
+  // Deterministic filename (per video + format) so the analysis, the background
+  // prefetch and the actual download all reuse the same extracted audio.
   return ytdlp.downloadAudio(url, format, downloadsDir, extractVideoId(url), [], convertOptions);
 }
 
-module.exports = { isValidYoutubeUrl, extractVideoId, analyze, downloadAudio };
+module.exports = { isValidYoutubeUrl, extractVideoId, analyze, prepare, downloadAudio };

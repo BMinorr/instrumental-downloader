@@ -48,13 +48,14 @@ cat > "$PLIST_PATH" <<PLIST
         <false/>
     </dict>
 
-    <!-- Laptop-friendly: proces de fundal cu prioritate scăzută, nu ține Mac-ul treaz. -->
+    <!-- Idle cost is ~0% CPU regardless (nothing runs between downloads, and KeepAlive
+         doesn't keep the Mac awake). Do NOT use Background / Nice / LowPriorityIO — and
+         note "Adaptive" is not enough either: a plain LaunchAgent under those still runs
+         at the lowest scheduling priority, which also throttles the yt-dlp and ffmpeg
+         children it spawns. Measured: analyze ~7-10s instead of ~3s, MP3 export ~10s
+         instead of ~2s. "Interactive" gives normal priority (verified with `ps`). -->
     <key>ProcessType</key>
-    <string>Background</string>
-    <key>Nice</key>
-    <integer>5</integer>
-    <key>LowPriorityIO</key>
-    <true/>
+    <string>Interactive</string>
 
     <key>StandardOutPath</key>
     <string>$SERVER_DIR/launchd.log</string>

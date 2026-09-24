@@ -1,4 +1,4 @@
-const { runYtDlp } = require("./ytdlp");
+const { runYtDlp, saveInfo } = require("./ytdlp");
 
 const SPOTIFY_URL_RE = /^https?:\/\/open\.spotify\.com\/(intl-[a-z]{2}\/)?track\/([\w]{15,})/i;
 
@@ -38,7 +38,7 @@ function decodeHtmlEntities(str) {
     .replace(/&gt;/g, ">");
 }
 
-async function searchYoutube(query) {
+async function searchYoutube(query, downloadsDir) {
   const { stdout } = await runYtDlp([
     "--dump-json",
     "--no-playlist",
@@ -48,6 +48,9 @@ async function searchYoutube(query) {
   ]);
   try {
     const info = JSON.parse(stdout.trim().split("\n").pop());
+    // The search already extracted the full video info — save it so the download
+    // that follows doesn't have to extract the same video a second time.
+    saveInfo(downloadsDir, info.id, info);
     return {
       id: info.id,
       url: `https://www.youtube.com/watch?v=${info.id}`,
@@ -61,14 +64,14 @@ async function searchYoutube(query) {
   }
 }
 
-async function resolveSpotifyToYoutube(url) {
+async function resolveSpotifyToYoutube(url, downloadsDir) {
   if (!isValidSpotifyUrl(url)) {
     throw new Error("Link Spotify invalid. Trebuie să fie un link către o piesă (track).");
   }
 
   const spotify = await fetchSpotifyMetadata(url);
   const query = [spotify.artist, spotify.title, "audio"].filter(Boolean).join(" ");
-  const youtube = await searchYoutube(query);
+  const youtube = await searchYoutube(query, downloadsDir);
 
   return { spotify, youtube };
 }

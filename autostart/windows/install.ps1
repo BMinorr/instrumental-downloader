@@ -25,7 +25,9 @@ Set-Content -Path $VbsPath -Value $VbsContent -Encoding ASCII
 
 $Action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$VbsPath`""
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
-$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+# -Priority 4 = normal. Task Scheduler's default is 7 (below normal), and the spawned yt-dlp/ffmpeg
+# processes inherit it, so downloads/conversions would run at reduced priority on a busy PC.
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -Priority 4
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 

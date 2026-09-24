@@ -125,17 +125,33 @@ npm start
 
 Tunebat analizează fișierele **local, în browser** (nu le trimite pe niciun server — au confirmat asta explicit pe pagina lor). Extensia profită de asta: după ce descarci o piesă, ia bytes-ii fișierului deja descărcat (din cache-ul local al serverului) și îi „livrează" direct în input-ul de upload al Tunebat, exact cum ar face selecția manuală a fișierului — Tunebat pornește analiza automat de-acolo.
 
+Tunebat e o aplicație randată complet în browser (HTML-ul lui nu conține widget-ul de upload), așa că extensia nu așteaptă încărcarea completă a paginii (reclame, analytics) și nici o pauză fixă: verifică la fiecare 100 ms până când input-ul de upload există și React l-a inițializat, apoi inserează fișierul imediat — de obicei în mai puțin de o jumătate de secundă, față de ~2 s înainte. Dacă inserarea eșuează, un mesaj apare direct pe pagina Tunebat.
+
 Asta rulează dintr-un **service worker** al extensiei (`background.js`), ca să funcționeze chiar dacă închizi popup-ul înainte să se termine descărcarea — starea „descărcat" se salvează, iar butonul Tunebat apare oricând redeschizi popup-ul pe aceeași piesă.
 
 ## Viteza descărcării
 
-Sursa audio se descarcă **o singură dată per piesă**, indiferent de câte formate ceri. Dacă descarci MP3 și apoi vrei și WAV (sau invers) pe aceeași piesă, a doua conversie e locală (ffmpeg, fără rețea) — de obicei sub o secundă, față de câteva secunde pentru prima descărcare. Am adăugat și descărcare pe fragmente în paralel (`--concurrent-fragments 4`) pentru prima descărcare, ceea ce ajută pe conexiuni rapide.
+Timpi măsurați pe un MP3 de 3:33 (YouTube), de la deschiderea popup-ului până la fișier:
 
-Înregistrările de pe tab-ul Sample se trimit către server ca bytes bruți (nu JSON+base64) — mai rapid și fără overhead-ul de ~33% pe care l-ar adăuga base64 la fișiere de câțiva MB.
+| | Înainte | Acum |
+|---|---|---|
+| Titlul + thumbnail-ul apar | ~3-8 s | instant (din tab) |
+| Analiza (uploader, durată) | ~3-8 s | ~3 s |
+| Click pe MP3 → fișier | ~20 s | ~1-2 s (aproape 0 dacă aștepți puțin) |
+
+Ce s-a schimbat:
+
+- **Prioritatea serviciului pe Mac**: `launchd` pornea serverul cu `ProcessType=Background` + `Nice`, iar copiii lui (yt-dlp, ffmpeg) moșteneau prioritatea minimă — tot ce făcea serverul mergea de 3-4× mai încet decât la o rulare normală. Acum e `Interactive` (prioritate normală, verificat cu `ps`). Consumul la inactivitate rămâne ~0%. **Pe Windows**, Task Scheduler pornește implicit task-urile cu prioritate „below normal" — `install.ps1` setează acum `-Priority 4` (normal); **rulează-l din nou, ca Administrator, la studio** ca să se aplice.
+- **O singură extragere yt-dlp per piesă**: extragerea (pagina + player + JS challenge) e partea lentă (~3 s), descărcarea propriu-zisă a audio-ului durează sub 1 s. Analiza salvează acum metadatele complete (`<id>.info.json`), iar descărcarea le reîncarcă (`--load-info-json`) în loc să extragă a doua oară. Pentru Spotify, căutarea salvează la fel metadatele videoclipului găsit.
+- **Pregătire în fundal**: imediat ce analiza se termină, serverul descarcă sursa audio și face **și MP3, și WAV** cât timp te uiți la ecran. Dacă apeși MP3 între timp, cererea se alătură aceluiași job (nu se duplică nimic). Costul: câteva secunde de CPU și ~50 MB pe disc (șterse automat după 1 h) pentru fiecare link pe care deschizi extensia.
+- **Butoanele MP3/WAV sunt active imediat** pe YouTube: titlul se ia din tab, thumbnail-ul din id-ul videoclipului; analiza doar completează uploader-ul și durata.
+- **Normalizare de volum mai rapidă** (vezi mai jos): ~6 s → ~0,5 s.
+
+Sursa audio se descarcă **o singură dată per piesă**; al doilea format se face local din ea, fără rețea. Înregistrările din tab-ul Sample se trimit ca bytes bruți (nu JSON+base64).
 
 ## Normalizare volum
 
-Implicit, orice conversie (YouTube/Spotify/Instagram **și** Sample) trece printr-o normalizare de volum (ffmpeg `loudnorm`, țintă -16 LUFS) — piesele/înregistrările ies la un volum perceput similar, indiferent cât de tare sau de încet era sursa originală. Se poate dezactiva din tab-ul **Settings**.
+Implicit, orice conversie (YouTube/Spotify/Instagram **și** Sample) ajunge la **-16 LUFS** (volum perceput), ca piesele/înregistrările să sune la fel de tare indiferent de sursă. Se măsoară volumul cu filtrul rapid `ebur128` (~0,4 s), apoi se aplică un câștig static + un limiter la -1,5 dBFS. Față de filtrul `loudnorm` folosit inițial (~6 s pe piesă) rezultatul e același ca volum (verificat: -16,0 LUFS, vârf -3,1 dBFS) și lasă dinamica piesei neatinsă. Piesele foarte încete sunt amplificate până la țintă, cele foarte tari sunt reduse, iar tăcerea rămâne neschimbată. Se poate dezactiva din tab-ul **Settings**.
 
 ## Actualizare yt-dlp
 
@@ -199,7 +215,7 @@ Pentru un instrumental pe care îl ai deja pe disc (trimis de client pe WhatsApp
 
 1. Deschide extensia → tab-ul **File**
 2. Trage fișierul în zonă (drag & drop) **sau** click în zonă și alege-l din file explorer — formate acceptate: MP3, WAV, FLAC, AAC, OGG, M4A (exact cele pe care le primește Tunebat), maxim 100 MB
-3. Click pe **„Analyze BPM & Key on Tunebat"** — se deschide Tunebat cu fișierul deja inserat. Fără fișier ales, butonul doar deschide Tunebat gol.
+3. Butonul **„Analyze BPM & Key on Tunebat"** apare abia după ce ai ales un fișier — click pe el deschide Tunebat cu fișierul deja inserat.
 
 Fișierul se copiază pe serverul local (`POST /api/stash`, se șterge automat după 1 oră) doar în momentul click-ului pe Tunebat — popup-ul se închide imediat ce se deschide tab-ul Tunebat, deci service worker-ul trebuie să-l preia prin URL, exact ca la piesele descărcate. Nu se convertește și nu se descarcă nimic.
 

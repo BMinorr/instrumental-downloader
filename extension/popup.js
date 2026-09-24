@@ -51,6 +51,9 @@ const els = {
 };
 
 let currentCacheKey = null;
+// What the MP3/WAV buttons act on. Set by renderTrack (possibly twice for YouTube: first
+// an instant preview built from the tab itself, then the server's authoritative data).
+let currentMedia = null; // { url, title }
 
 function extractMediaId(url) {
   const ytMatch = url.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{6,})/i);
@@ -95,6 +98,8 @@ async function checkServer() {
 
 async function main() {
   els.btnTunebat.addEventListener("click", makeTunebatHandler(els.btnTunebat, els.progress));
+  els.btnMp3.addEventListener("click", () => handleDownload("mp3"));
+  els.btnWav.addEventListener("click", () => handleDownload("wav"));
   initFileTab();
   initSampleTab();
   initSettingsTab();
@@ -130,6 +135,7 @@ async function main() {
   }
 
   showSkeleton();
+  if (platform === "youtube") showInstantPreview(url, tab?.title);
 
   const serverOk = await checkServer();
   if (!serverOk) {
@@ -150,7 +156,7 @@ async function main() {
 
 function showSkeleton() {
   els.trackInfo.classList.remove("hidden");
-  els.thumbnail.removeAttribute("src");
+  setThumbnail(null);
   els.trackTitle.textContent = "Loading…";
   els.trackTitle.classList.add("placeholder");
   els.trackMeta.textContent = "";
@@ -167,7 +173,7 @@ async function handleDirect(url) {
     const res = await fetch(`${SERVER}/api/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, loudnorm: await getLoudnormSetting() }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
@@ -187,7 +193,7 @@ async function handleSpotify(spotifyUrl) {
     const res = await fetch(`${SERVER}/api/spotify-resolve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: spotifyUrl }),
+      body: JSON.stringify({ url: spotifyUrl, loudnorm: await getLoudnormSetting() }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
@@ -205,8 +211,15 @@ async function handleSpotify(spotifyUrl) {
 }
 
 function renderTrack(mediaUrl, data) {
+  currentMedia = { url: mediaUrl, title: data.title };
+
   els.trackInfo.classList.remove("hidden");
-  els.thumbnail.src = data.thumbnail || "";
+  // Keep an already-loaded preview thumbnail instead of swapping in the (identical) one
+  // from the server, which would flash the placeholder again.
+  if (!els.thumbnail.getAttribute("src")) {
+    setThumbnail(data.thumbnail);
+    if (!data.thumbnail) els.thumbnail.parentElement.classList.remove("loading"); // nothing coming
+  }
   els.trackTitle.textContent = data.title || "Untitled";
   els.trackTitle.classList.remove("placeholder");
   els.trackMeta.textContent = [data.uploader, formatDuration(data.duration)]
@@ -218,11 +231,43 @@ function renderTrack(mediaUrl, data) {
   els.btnWav.classList.remove("loading");
   els.btnMp3.disabled = false;
   els.btnWav.disabled = false;
-  els.btnMp3.addEventListener("click", () => handleDownload(mediaUrl, "mp3", data.title));
-  els.btnWav.addEventListener("click", () => handleDownload(mediaUrl, "wav", data.title));
 }
 
-async function handleDownload(url, format, title) {
+// Gray placeholder box (#thumb-box) until the thumbnail has actually loaded.
+function setThumbnail(url) {
+  const img = els.thumbnail;
+  const box = img.parentElement;
+  img.classList.remove("loaded");
+  box.classList.add("loading");
+  img.onload = () => {
+    img.classList.add("loaded");
+    box.classList.remove("loading");
+  };
+  img.onerror = () => box.classList.remove("loading"); // stay a plain gray box, stop pulsing
+  if (url) img.src = url;
+  else img.removeAttribute("src");
+}
+
+// YouTube pages: the title is already in the tab and the thumbnail URL follows from
+// the video id, so show both immediately and enable MP3/WAV — the server's analysis
+// (~3s, yt-dlp) then only fills in uploader + duration. A download clicked meanwhile
+// simply waits on that same analysis server-side.
+function showInstantPreview(url, tabTitle) {
+  const id = extractMediaId(url);
+  const title = (tabTitle || "")
+    .replace(/^\(\d+\)\s*/, "") // "(3) " unread-notification prefix
+    .replace(/\s*-\s*YouTube$/, "")
+    .trim();
+  if (!id || !title || title === "YouTube") return;
+
+  els.thumbnail.removeAttribute("src");
+  setThumbnail(`https://i.ytimg.com/vi/${id}/mqdefault.jpg`);
+  renderTrack(url, { title });
+}
+
+async function handleDownload(format) {
+  if (!currentMedia) return;
+  const url = currentMedia.url;
   els.btnMp3.disabled = true;
   els.btnWav.disabled = true;
   els.progress.classList.remove("hidden");
@@ -238,7 +283,8 @@ async function handleDownload(url, format, title) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error.");
 
-    const safeTitle = (title || "instrumental").replace(/[\\/:*?"<>|]/g, "_");
+    // Read the title now, not at click time: it may have been refined by the analysis.
+    const safeTitle = (currentMedia.title || "instrumental").replace(/[\\/:*?"<>|]/g, "_");
     const filename = `${safeTitle}.${format}`;
     const fileUrl = `${SERVER}${data.downloadUrl}`;
 
@@ -411,11 +457,12 @@ function initFileTab() {
 
   const openTunebat = makeTunebatHandler(els.btnFileTunebat, els.fileProgress);
   els.btnFileTunebat.addEventListener("click", async () => {
-    if (selectedFile && !els.btnFileTunebat.dataset.fileUrl) {
+    if (!selectedFile) return;
+    if (!els.btnFileTunebat.dataset.fileUrl) {
       const ok = await stashSelectedFile();
       if (!ok) return;
     }
-    openTunebat(); // no file selected -> just opens Tunebat
+    openTunebat();
   });
 }
 
@@ -437,6 +484,7 @@ function selectFile(file) {
   selectedFile = file;
   els.fileDropzone.classList.toggle("has-file", !!file);
   els.fileClear.classList.toggle("hidden", !file);
+  els.btnFileTunebat.classList.toggle("hidden", !file); // nothing to analyze until a file is chosen
   els.fileDropzoneTitle.textContent = file ? file.name : "Drop an audio file here";
   els.fileDropzoneSub.textContent = file
     ? `${formatBytes(file.size)} · click to choose another`

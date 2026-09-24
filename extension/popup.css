@@ -215,13 +215,40 @@ main {
   margin-bottom: 14px;
 }
 
-#thumbnail {
+/* The gray box is the placeholder; the image sits on top and stays invisible until it
+   has actually loaded (an <img> with no/failed src would draw a broken-image icon). */
+#thumb-box {
   width: 72px;
   height: 40px;
-  object-fit: cover;
   border-radius: 6px;
   flex-shrink: 0;
-  background: #000;
+  overflow: hidden;
+  background: #3a3c46;
+}
+
+#thumb-box.loading {
+  animation: thumb-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes thumb-pulse {
+  0%, 100% {
+    background: #3a3c46;
+  }
+  50% {
+    background: #4a4d59;
+  }
+}
+
+#thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+}
+
+#thumbnail.loaded {
+  opacity: 1;
 }
 
 .title {
