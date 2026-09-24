@@ -45,6 +45,8 @@ const els = {
   settingStartTab: document.getElementById("setting-start-tab"),
   settingPrefetch: document.getElementById("setting-prefetch"),
   formatChips: document.getElementById("format-chips"),
+  pasteInput: document.getElementById("paste-input"),
+  pasteGo: document.getElementById("paste-go"),
   recordingShortcut: document.getElementById("recording-shortcut"),
   btnShortcuts: document.getElementById("btn-shortcuts"),
   ytdlpStatus: document.getElementById("ytdlp-status"),
@@ -200,12 +202,28 @@ async function main() {
     setupTabs(),
     chrome.tabs.query({ active: true, currentWindow: true }),
   ]);
-  const url = tab?.url || "";
-  const platform = detectPlatform(url);
+  activeTabInfo = { url: tab?.url || "", title: tab?.title || "" };
+  initPasteRow();
+  await loadLink(activeTabInfo.url, { tabTitle: activeTabInfo.title });
+}
 
+// The page open in the current tab (what the Link tab loads by default).
+let activeTabInfo = { url: "", title: "" };
+// Bumped on every loadLink(): a slow response for a link the user has since replaced
+// (by pasting another) must not overwrite the newer one.
+let linkLoadId = 0;
+
+// Loads a link into the Link tab: the current tab's page on open, or a pasted link.
+async function loadLink(url, { tabTitle = "", pasted = false } = {}) {
+  const loadId = ++linkLoadId;
+  const stale = () => loadId !== linkLoadId;
+  resetLinkView();
+
+  const platform = detectPlatform(url);
   if (platform === "unknown") {
-    els.statusMessage.textContent =
-      "Open a YouTube video, a Spotify track, or an Instagram Story/Reel/Post to download it.";
+    els.statusMessage.textContent = pasted
+      ? "That doesn't look like a YouTube, Spotify or Instagram link."
+      : "Open a YouTube video, a Spotify track or an Instagram Story/Reel/Post — or paste a link above.";
     els.statusMessage.classList.remove("hidden");
     checkServer();
     return;
@@ -217,6 +235,7 @@ async function main() {
   // with no network calls at all — zero wait on reopen.
   if (currentCacheKey) {
     const cached = await getCachedBundle(currentCacheKey);
+    if (stale()) return;
     if (cached) {
       checkServer();
       renderTrack(cached.mediaUrl, cached);
@@ -226,9 +245,13 @@ async function main() {
   }
 
   showSkeleton();
-  if (platform === "youtube") showInstantPreview(url, tab?.title);
+  if (platform === "youtube") {
+    if (tabTitle) showInstantPreview(url, tabTitle);
+    else if (pasted) showOembedPreview(url, stale); // no tab to read the title from
+  }
 
   const serverOk = await checkServer();
+  if (stale()) return;
   if (!serverOk) {
     els.statusMessage.textContent = "Start the local server (server/npm start) to download.";
     els.statusMessage.classList.remove("hidden");
@@ -238,10 +261,73 @@ async function main() {
   }
 
   if (platform === "spotify") {
-    await handleSpotify(url);
+    await handleSpotify(url, stale);
   } else {
     // YouTube and Instagram share the same direct flow (the server decides the platform from the link).
-    await handleDirect(url);
+    await handleDirect(url, stale);
+  }
+}
+
+// Clears everything a previously loaded link left in the Link tab.
+function resetLinkView() {
+  currentMedia = null;
+  currentCacheKey = null;
+  els.statusMessage.classList.add("hidden");
+  els.trackInfo.classList.add("hidden");
+  els.formatOptions.classList.add("hidden");
+  els.progress.classList.add("hidden");
+  els.progress.textContent = "";
+  els.btnTunebat.classList.add("hidden");
+  delete els.btnTunebat.dataset.fileUrl;
+  delete els.btnTunebat.dataset.filename;
+  els.thumbnail.removeAttribute("src");
+}
+
+// --- Paste-a-link row (Link tab) ---
+// Lets you load a link without opening its page first: copy the link a client sent, open
+// the extension, paste. Pasting loads it straight away; Enter/→ loads whatever is typed;
+// an empty field + Enter goes back to the page in the current tab.
+
+function extractUrl(text) {
+  const match = String(text).match(/https?:\/\/[^\s<>"']+/i);
+  return match ? match[0] : "";
+}
+
+function initPasteRow() {
+  const submit = () => {
+    const raw = els.pasteInput.value.trim();
+    if (!raw) {
+      loadLink(activeTabInfo.url, { tabTitle: activeTabInfo.title });
+      return;
+    }
+    const url = extractUrl(raw);
+    els.pasteInput.value = url || raw;
+    loadLink(url, { pasted: true });
+  };
+  els.pasteInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+  });
+  els.pasteInput.addEventListener("paste", () => setTimeout(submit, 0)); // after the text lands
+  els.pasteGo.addEventListener("click", submit);
+
+  // Nothing to load from the current tab -> the pasted link is the only thing to do here.
+  if (detectPlatform(activeTabInfo.url) === "unknown") els.pasteInput.focus();
+}
+
+// Instant title + thumbnail for a pasted YouTube link (YouTube's public oEmbed, ~0.3 s),
+// while the server's analysis (~3 s) fills in the rest. Best effort: failures are ignored.
+async function showOembedPreview(url, stale) {
+  const id = extractMediaId(url);
+  if (!id) return;
+  setThumbnail(`https://i.ytimg.com/vi/${id}/mqdefault.jpg`);
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`);
+    if (!res.ok) return;
+    const info = await res.json();
+    if (stale() || els.trackTitle.textContent !== "Loading…") return; // analysis already answered
+    renderTrack(url, { title: info.title, uploader: info.author_name });
+  } catch {
+    // stay on the skeleton until the analysis arrives
   }
 }
 
@@ -256,7 +342,7 @@ function showSkeleton() {
   linkGrid.setLoading(true);
 }
 
-async function handleDirect(url) {
+async function handleDirect(url, stale = () => false) {
   try {
     const res = await fetch(`${SERVER}/api/analyze`, {
       method: "POST",
@@ -264,11 +350,13 @@ async function handleDirect(url) {
       body: JSON.stringify({ url, ...(await getAnalyzeOptions()) }),
     });
     const data = await res.json();
+    if (stale()) return;
     if (!res.ok) throw new Error(data.error || "Unknown error.");
 
     renderTrack(url, data);
     if (currentCacheKey) setCachedBundle(currentCacheKey, { ...data, mediaUrl: url });
   } catch (err) {
+    if (stale()) return;
     els.statusMessage.textContent = `Error: ${withYtdlpHint(err.message)}`;
     els.statusMessage.classList.remove("hidden");
     els.trackInfo.classList.add("hidden");
@@ -276,7 +364,7 @@ async function handleDirect(url) {
   }
 }
 
-async function handleSpotify(spotifyUrl) {
+async function handleSpotify(spotifyUrl, stale = () => false) {
   try {
     const res = await fetch(`${SERVER}/api/spotify-resolve`, {
       method: "POST",
@@ -284,6 +372,7 @@ async function handleSpotify(spotifyUrl) {
       body: JSON.stringify({ url: spotifyUrl, ...(await getAnalyzeOptions()) }),
     });
     const data = await res.json();
+    if (stale()) return;
     if (!res.ok) throw new Error(data.error || "Unknown error.");
 
     els.statusMessage.textContent = `Found on YouTube: "${data.youtube.title}"`;
@@ -291,6 +380,7 @@ async function handleSpotify(spotifyUrl) {
     renderTrack(data.youtube.url, data.youtube);
     if (currentCacheKey) setCachedBundle(currentCacheKey, { ...data.youtube, mediaUrl: data.youtube.url });
   } catch (err) {
+    if (stale()) return;
     els.statusMessage.textContent = `Error: ${withYtdlpHint(err.message)}`;
     els.statusMessage.classList.remove("hidden");
     els.trackInfo.classList.add("hidden");
@@ -352,7 +442,10 @@ function showInstantPreview(url, tabTitle) {
 
 async function handleDownload(format) {
   if (!currentMedia) return;
-  const url = currentMedia.url;
+  // Captured now: the user may load another link (paste) while this one converts.
+  const media = currentMedia;
+  const url = media.url;
+  const cacheKey = currentCacheKey;
   linkGrid.setBusy(format);
   els.progress.classList.remove("hidden");
   els.progress.textContent = "Downloading and converting...";
@@ -367,7 +460,8 @@ async function handleDownload(format) {
     if (!res.ok) throw new Error(data.error || "Unknown error.");
 
     // Read the title now, not at click time: it may have been refined by the analysis.
-    const safeTitle = (currentMedia.title || "instrumental").replace(/[\\/:*?"<>|]/g, "_");
+    const title = currentMedia?.url === url ? currentMedia.title : media.title;
+    const safeTitle = (title || "instrumental").replace(/[\\/:*?"<>|]/g, "_");
     const filename = `${safeTitle}.${format}`;
     const fileUrl = `${SERVER}${data.downloadUrl}`;
 
@@ -378,7 +472,12 @@ async function handleDownload(format) {
     }
 
     els.progress.textContent = "Download started — check Chrome's downloads bar.";
-    trackDownloadCompletion(downloadId, fileUrl, filename, els.btnTunebat, currentCacheKey);
+    if (currentMedia?.url === url) {
+      trackDownloadCompletion(downloadId, fileUrl, filename, els.btnTunebat, cacheKey);
+    } else if (cacheKey) {
+      // Another link is on screen now: still remember this download for its own page.
+      chrome.storage.local.set({ [`pendingDownload:${downloadId}`]: { cacheKey, fileUrl, filename } });
+    }
   } catch (err) {
     els.progress.textContent = `Error: ${withYtdlpHint(err.message)}`;
   } finally {
