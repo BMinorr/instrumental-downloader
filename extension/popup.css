@@ -38,7 +38,7 @@ header {
 
 #tabs {
   display: flex;
-  gap: 12px;
+  gap: 11px;
 }
 
 .tab-btn {
@@ -912,4 +912,145 @@ kbd {
 
 #history-clear {
   margin-top: 12px;
+}
+
+#queue-input {
+  display: block;
+  width: 100%;
+  min-height: 62px;
+  resize: vertical;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#queue-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#queue-controls .settings-input {
+  width: 118px;
+  flex-shrink: 0;
+}
+
+#queue-controls .secondary-btn {
+  margin-top: 0;
+  flex: 1;
+}
+
+.secondary-btn.strong {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.secondary-btn.strong:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#queue-message {
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+#queue-empty {
+  margin-top: 12px;
+}
+
+.queue-summary {
+  margin: 12px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+#queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.queue-item:last-child {
+  border-bottom: none;
+}
+
+.queue-item .history-info {
+  flex: 1;
+}
+
+.queue-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.queue-done .queue-icon {
+  color: var(--ok);
+}
+
+.queue-error .queue-icon,
+.queue-error .queue-meta {
+  color: var(--err);
+}
+
+.queue-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.spinner.small {
+  width: 13px;
+  height: 13px;
+  border-width: 2px;
+  border-color: rgba(108, 92, 231, 0.3);
+  border-top-color: var(--accent-hover);
+}
+
+.queue-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-error .queue-meta {
+  white-space: normal;
+}
+
+#queue-footer {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+#queue-footer .secondary-btn {
+  margin-top: 0;
+  flex: 1;
+  padding: 7px 6px;
+  font-size: 11px;
+}
+
+#tab-queue.has-activity::after {
+  background: var(--accent-hover);
 }

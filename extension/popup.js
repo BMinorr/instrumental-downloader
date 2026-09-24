@@ -46,6 +46,19 @@ const els = {
   formatChips: document.getElementById("format-chips"),
   settingTags: document.getElementById("setting-tags"),
   settingFileName: document.getElementById("setting-file-name"),
+  tabQueue: document.getElementById("tab-queue"),
+  panelQueue: document.getElementById("panel-queue"),
+  queueInput: document.getElementById("queue-input"),
+  queueFormat: document.getElementById("queue-format"),
+  queueAdd: document.getElementById("queue-add"),
+  queueMessage: document.getElementById("queue-message"),
+  queueEmpty: document.getElementById("queue-empty"),
+  queueSummary: document.getElementById("queue-summary"),
+  queueList: document.getElementById("queue-list"),
+  queueFooter: document.getElementById("queue-footer"),
+  queueRetry: document.getElementById("queue-retry"),
+  queueClearDone: document.getElementById("queue-clear-done"),
+  queueClearAll: document.getElementById("queue-clear-all"),
   tabHistory: document.getElementById("tab-history"),
   panelHistory: document.getElementById("panel-history"),
   historyList: document.getElementById("history-list"),
@@ -190,6 +203,7 @@ async function main() {
   getSettings().then((settings) => applyVisibleFormats(settings.formats));
   initFileTab();
   initHistoryTab();
+  initQueueTab();
   initSampleTab();
   initSettingsTab();
 
@@ -555,12 +569,13 @@ function setCachedBundle(key, bundle) {
   chrome.storage.local.set({ [`bundle:${key}`]: bundle });
 }
 
-const TAB_NAMES = ["file", "link", "sample", "history", "settings"];
+const TAB_NAMES = ["file", "link", "sample", "queue", "history", "settings"];
 
 async function setupTabs() {
   els.tabFile.addEventListener("click", () => switchTab("file"));
   els.tabLink.addEventListener("click", () => switchTab("link"));
   els.tabSample.addEventListener("click", () => switchTab("sample"));
+  els.tabQueue.addEventListener("click", () => switchTab("queue"));
   els.tabHistory.addEventListener("click", () => switchTab("history"));
   els.tabSettings.addEventListener("click", () => switchTab("settings"));
 
@@ -572,8 +587,8 @@ async function setupTabs() {
 }
 
 function switchTab(which) {
-  const tabs = { file: els.tabFile, link: els.tabLink, sample: els.tabSample, history: els.tabHistory, settings: els.tabSettings };
-  const panels = { file: els.panelFile, link: els.panelLink, sample: els.panelSample, history: els.panelHistory, settings: els.panelSettings };
+  const tabs = { file: els.tabFile, link: els.tabLink, sample: els.tabSample, queue: els.tabQueue, history: els.tabHistory, settings: els.tabSettings };
+  const panels = { file: els.panelFile, link: els.panelLink, sample: els.panelSample, queue: els.panelQueue, history: els.panelHistory, settings: els.panelSettings };
   for (const name of TAB_NAMES) {
     const isActive = name === which;
     tabs[name].classList.toggle("active", isActive);

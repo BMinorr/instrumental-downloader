@@ -11,6 +11,7 @@
         <button id="tab-file" class="tab-btn">File</button>
         <button id="tab-link" class="tab-btn">Link</button>
         <button id="tab-sample" class="tab-btn">Sample</button>
+        <button id="tab-queue" class="tab-btn">Queue</button>
       </div>
       <div id="header-right">
         <button id="tab-history" class="icon-tab-btn" aria-label="History" title="History">
@@ -144,6 +145,23 @@
         </div>
       </div>
 
+      <div id="panel-queue" class="hidden">
+        <textarea id="queue-input" class="text-input" rows="3" placeholder="Paste links — one per line — or a YouTube playlist" spellcheck="false"></textarea>
+        <div id="queue-controls">
+          <select id="queue-format" class="settings-input" aria-label="Format"></select>
+          <button id="queue-add" class="secondary-btn strong">Add to queue</button>
+        </div>
+        <p id="queue-message" class="meta hidden"></p>
+        <p id="queue-empty" class="meta">Nothing queued. Downloads keep running with this window closed.</p>
+        <p id="queue-summary" class="queue-summary"></p>
+        <ul id="queue-list"></ul>
+        <div id="queue-footer" class="hidden">
+          <button id="queue-retry" class="secondary-btn hidden">Retry failed</button>
+          <button id="queue-clear-done" class="secondary-btn hidden">Clear finished</button>
+          <button id="queue-clear-all" class="secondary-btn">Clear all</button>
+        </div>
+      </div>
+
       <div id="panel-history" class="hidden">
         <p id="history-empty" class="meta">Nothing yet — files you download show up here.</p>
         <ul id="history-list"></ul>
@@ -265,6 +283,7 @@
 
     <script src="shared.js"></script>
     <script src="history.js"></script>
+    <script src="queue.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

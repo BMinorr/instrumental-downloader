@@ -6,7 +6,6 @@
 // the network calm. If the worker is killed mid-download, the next start puts the interrupted
 // item back in line (resumeQueue) and carries on.
 
-const QUEUE_KEY = "queue";
 const QUEUE_MAX = 300;
 
 let queueRunning = false;

@@ -16,6 +16,7 @@ const FORMATS = [
 ];
 
 
+const QUEUE_KEY = "queue"; // download queue (see queue-engine.js / queue.js)
 const HISTORY_KEY = "history";
 const HISTORY_MAX = 30;
 
