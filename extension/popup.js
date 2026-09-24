@@ -69,12 +69,12 @@ const TAB_ELEMENTS = {
 };
 let visibleTabs = TABS.map((t) => t.id);
 
-// Order and visibility come from Settings (Settings itself is always available).
+// Order (left group) and visibility come from Settings (Settings itself is always available).
 function applyTabSettings(settings) {
   visibleTabs = settings.visibleTabs;
   for (const id of settings.tabOrder) {
     const button = TAB_ELEMENTS[id][0];
-    els.tabsBar.appendChild(button); // re-appending moves it: this is the reordering
+    if (TABS.find((t) => t.id === id).side === "left") els.tabsBar.appendChild(button); // re-appending moves it: this is the reordering
     button.classList.toggle("hidden", !visibleTabs.includes(id));
   }
 }

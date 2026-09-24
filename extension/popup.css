@@ -36,57 +36,78 @@ header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-#tabs {
+#tabs,
+#header-right {
   display: flex;
-  gap: 11px;
+  align-items: center;
+  gap: 2px;
 }
 
+/* Icon tabs: the text shows next to the icon of the active tab (and while hovering one). */
 .tab-btn {
   appearance: none;
+  position: relative;
+  display: flex;
+  align-items: center;
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 14px;
+  font: inherit;
+  font-size: 13px;
   font-weight: 600;
-  padding: 4px 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  transition: color 0.12s, background 0.12s;
+}
+
+.tab-icon {
+  flex-shrink: 0;
+}
+
+.tab-label {
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 0.18s ease, margin-left 0.18s ease, opacity 0.15s ease;
+}
+
+.tab-btn:hover,
+.tab-btn:focus-visible {
+  color: var(--text);
+}
+
+.tab-btn:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: -1px;
 }
 
 .tab-btn.active {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  background: rgba(108, 92, 231, 0.18);
 }
 
-#header-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.tab-btn.active .tab-icon {
+  color: var(--accent-hover);
 }
 
-.icon-tab-btn {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  padding: 4px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.tab-btn:hover .tab-label,
+.tab-btn:focus-visible .tab-label,
+.tab-btn.active .tab-label {
+  max-width: 70px;
+  margin-left: 6px;
+  opacity: 1;
 }
 
-/* Red dot on the Settings gear while the local server is unreachable. */
-.icon-tab-btn {
-  position: relative;
-}
-
-.icon-tab-btn.alert::after {
+/* Red dot on a tab icon: the local server is unreachable (Settings) / something is running (Link, Sample). */
+.tab-btn.alert::after,
+.tab-btn.has-activity::after {
   content: "";
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 3px;
+  left: 20px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -94,13 +115,9 @@ header {
   box-shadow: 0 0 0 2px var(--bg); /* ring so the dot reads on top of the icon */
 }
 
-.icon-tab-btn:hover {
-  color: var(--text);
-}
-
-.icon-tab-btn.active {
-  color: var(--accent);
-  background: rgba(108, 92, 231, 0.15);
+.tab-btn.active.alert::after,
+.tab-btn.active.has-activity::after {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg) 82%, var(--accent));
 }
 
 #file-dropzone {
@@ -743,17 +760,6 @@ main {
   }
 }
 
-.tab-btn.has-activity::after {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--err);
-  margin-left: 5px;
-  vertical-align: middle;
-}
-
 .hidden {
   display: none !important;
 }
@@ -1200,6 +1206,8 @@ kbd {
 
 /* ---- Settings: draggable blocks + tab list ---- */
 .grip {
+  display: inline-block;
+  min-width: 10px;
   color: var(--muted);
   font-size: 11px;
   letter-spacing: -2px;

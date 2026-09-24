@@ -15,12 +15,13 @@ const FORMATS = [
   { id: "opus", label: "OPUS", sub: "192 kbps", title: "Opus, 192 kbps" },
 ];
 
-// Popup tabs the user can hide/reorder in Settings (Settings itself is always there).
+// Popup tabs the user can hide in Settings (Settings itself is always there). `side` is where the
+// tab sits in the header: the left ones can also be reordered, History sits on the right by Settings.
 const TABS = [
-  { id: "file", label: "File" },
-  { id: "link", label: "Link" },
-  { id: "sample", label: "Sample" },
-  { id: "history", label: "History" },
+  { id: "link", label: "Link", side: "left" },
+  { id: "file", label: "File", side: "left" },
+  { id: "sample", label: "Sample", side: "left" },
+  { id: "history", label: "History", side: "right" },
 ];
 
 // Building blocks for downloaded file names (Settings > File name). `example` feeds the
@@ -171,11 +172,13 @@ function validFormatIds(saved) {
   return ids.length ? ids : all;
 }
 
-// Saved tab order, cleaned up: unknown ids dropped, missing ones appended.
+// Saved tab order, cleaned up: unknown ids dropped, missing ones appended, right-side tabs last.
 function validTabOrder(saved) {
   const all = TABS.map((t) => t.id);
   const kept = Array.isArray(saved) ? saved.filter((id, i) => all.includes(id) && saved.indexOf(id) === i) : [];
-  return [...kept, ...all.filter((id) => !kept.includes(id))];
+  const order = [...kept, ...all.filter((id) => !kept.includes(id))];
+  const side = (id) => TABS.find((t) => t.id === id).side;
+  return [...order.filter((id) => side(id) === "left"), ...order.filter((id) => side(id) !== "left")]; // History (right side) last
 }
 
 // Saved name blocks, cleaned up: known ids only, no repeats, never empty.

@@ -89,15 +89,17 @@ async function showRecordingShortcut() {
 
 function buildTabsList(settings) {
   els.tabsList.replaceChildren();
-  for (const id of settings.tabOrder) {
+  // Left-hand tabs can be dragged into any order; History always sits on the right (switch only).
+  const ids = [...settings.tabOrder.filter((id) => TABS.find((t) => t.id === id).side === "left"), ...TABS.filter((t) => t.side === "right").map((t) => t.id)];
+  for (const id of ids) {
     const tab = TABS.find((t) => t.id === id);
     const item = document.createElement("li");
     item.className = "tab-item";
     item.dataset.id = id;
     item.innerHTML =
-      '<span class="grip" aria-hidden="true">⋮⋮</span><span class="tab-item-label"></span>' +
+      `<span class="grip" aria-hidden="true">${tab.side === "left" ? "⋮⋮" : ""}</span><span class="tab-item-label"></span>` +
       '<span class="switch"><input type="checkbox" /><span class="switch-track"></span></span>';
-    item.querySelector(".tab-item-label").textContent = tab.label;
+    item.querySelector(".tab-item-label").textContent = tab.side === "left" ? tab.label : `${tab.label} (right side)`;
     const toggle = item.querySelector("input");
     toggle.checked = settings.visibleTabs.includes(id);
     toggle.addEventListener("change", () => {
@@ -105,7 +107,7 @@ function buildTabsList(settings) {
       if (!els.tabsList.querySelector("input:checked")) toggle.checked = true;
       saveTabSettings();
     });
-    tabsSortable.attach(item);
+    if (tab.side === "left") tabsSortable.attach(item);
     els.tabsList.appendChild(item);
   }
 }

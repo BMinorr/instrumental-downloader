@@ -7,7 +7,7 @@ Extensie Chrome + server local pentru descărcarea instrumentalelor pe care ți 
 **Faza 3 (gata):** Instagram — Story, Reel și Post, cu autentificare din Chrome (vezi mai jos).
 **Faza 4 (gata):** tab „Sample" — înregistrează audio-ul care redă din tab-ul curent (ex. un beat pe care clientul ți-l cântă live într-un apel video), apoi descarcă-l ca MP3 320kbps sau WAV.
 
-Extensia are tab-urile **File** (alegi/tragi un fișier audio local și îl convertești), **Link** (YouTube/Spotify/Instagram — tab-ul implicit; lipești un link, mai multe sau un playlist), **Sample** (înregistrare directă din tab) și **History**, plus **Settings** (rotița). Tab-urile se pot ascunde și reordona din Settings. După fiecare descărcare, BPM-ul și cheia se iau **automat** de pe Tunebat (într-un tab în fundal) și ajung în numele fișierului.
+Extensia are, în stânga, tab-urile **Link** (YouTube/Spotify/Instagram — tab-ul implicit; lipești un link, mai multe sau un playlist), **File** (alegi/tragi un fișier audio local și îl convertești) și **Sample** (înregistrare directă din tab), iar în dreapta **History** și **Settings**. Tab-urile arată doar pictograma; textul apare lângă pictograma tab-ului activ (și la hover). Cele din stânga se pot ascunde și reordona din Settings, History se poate ascunde. După fiecare descărcare, BPM-ul și cheia se iau **automat** de pe Tunebat (într-un tab în fundal) și ajung în numele fișierului.
 
 ## De ce ai nevoie de un server local
 
@@ -129,7 +129,7 @@ Tunebat analizează fișierele **local, în browser** (nu le trimite pe niciun s
 3. salvează fișierul din nou sub **numele final**, cu BPM și cheie și în tag-uri (MP3/FLAC: `TBPM`/`TKEY`, `BPM`/`INITIALKEY`), apoi **șterge prima copie** — dar doar după ce copia nouă s-a terminat de salvat; dacă orice pas eșuează, prima copie rămâne neatinsă
 4. scrie rezultatul în History (și în coadă) — extensia îl arată sub butoanele de format într-un **tabel cu două coloane** (BPM | Key), fără alt text; cât timp analiza rulează, celulele arată un spinner
 
-**Tabelul de reverb** — sub tabelul BPM | Key (carduri și History), imediat ce BPM-ul e cunoscut, apare un tabel cu trei coloane: *Reverb size* | *Pre-delay* | *Decay time*, calculat local din BPM cu aceeași formulă ca [calculatorul de pe anotherproducer.com](https://anotherproducer.com/online-tools-for-musicians/delay-reverb-time-calculator/). Un click pe orice celulă copiază valoarea (numărul, fără „ms", gata de lipit într-un plugin). Se afișează doar în UI; nu intră în numele fișierului.
+**Tabelul de reverb** — sub tabelul BPM | Key (carduri și History), imediat ce BPM-ul e cunoscut, apare un tabel cu trei coloane: *Reverb size* | *Pre-delay* | *Decay time*, calculat local din BPM cu aceeași formulă ca [calculatorul de pe anotherproducer.com](https://anotherproducer.com/online-tools-for-musicians/delay-reverb-time-calculator/). Prima coloană arată doar durata (2 Bars, 1 Bar, 1/2 Note, 1/4 Note); *Pre-delay* e în ms, *Decay time* în secunde, tăiat (nu rotunjit) la 3 zecimale (3937,5 ms → 3.937 s). Un click pe orice celulă copiază valoarea (numărul, fără unitate, gata de lipit într-un plugin). Se afișează doar în UI; nu intră în numele fișierului.
 
 Mai multe fișiere la rând (o coadă, un playlist) folosesc **același tab Tunebat** — pagina se încarcă o singură dată — care se închide după câteva secunde de inactivitate. AIFF și Opus nu sunt acceptate de Tunebat, iar un fișier lossless foarte mare (peste 30 MB) e lent de predat paginii: pentru ele se analizează o copie WAV mono 22 kHz făcută pe loc (~4× mai mică, cu tot ce trebuie pentru BPM și cheie; nu se salvează nicăieri). Se poate opri, sau se poate lăsa tab-ul deschis / prima copie nesștearsă, din Settings → „BPM & key (Tunebat)". Cu „Ask where to save each file" pornit, analiza rulează dar fișierul nu se mai salvează a doua oară (nu vrem un al doilea dialog).
 
@@ -280,7 +280,7 @@ Rotița din colțul dreapta sus. Setările se salvează automat și se păstreaz
 
 **File names** — blocurile de mai sus. **BPM & key (Tunebat)** — analiza pe rând pentru *Link downloads*, *Sample recordings* și *Files, when added* (toate implicit ON), plus *Delete the first copy* și *Close the Tunebat tab when done* (implicit ON).
 
-**Tabs** — tragi ca să reordonezi File / Link / Sample / History și comuți ca să ascunzi (măcar unul rămâne vizibil; Settings e mereu acolo). Un tab ascuns nu costă nimic — de pildă, cu Link ascuns extensia nu mai pornește analiza și pregătirea în fundal la fiecare deschidere.
+**Tabs** — tragi ca să reordonezi Link / File / Sample (History rămâne în dreapta, lângă Settings) și comuți ca să ascunzi (măcar unul rămâne vizibil; Settings e mereu acolo). Un tab ascuns nu costă nimic — de pildă, cu Link ascuns extensia nu mai pornește analiza și pregătirea în fundal la fiecare deschidere.
 
 **Downloads** — *Ask where to save each file*, *Subfolder* (`Downloads/<subfolder>`), *Tags & cover art*. **Formats shown** — ce formate apar în grile (minim unul). **General** — *Open on* (ultimul tab sau unul dintre cele vizibile), *Prepare MP3 & WAV in advance* (vezi „Viteza descărcării"), *Record shortcut*.
 

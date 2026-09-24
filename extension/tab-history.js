@@ -62,11 +62,13 @@ function buildAnalysisTable(state, values = {}, { compact = false } = {}) {
 // Reverb settings that fit a tempo — same maths as anotherproducer.com's Delay & Reverb calculator.
 // One bar (4/4) lasts 240000 / bpm ms. Total reverb time = a note length of the bar; the pre-delay
 // is a short fraction of the bar (1/32, 1/64, 1/128, 1/512) and the decay time is what remains.
+// The pre-delay is shown in ms (2 decimals, like the site); the decay time in seconds, cut
+// (not rounded) to 3 decimals: 3937.5 ms -> 3.937 s.
 const REVERB_SIZES = [
-  { name: "Hall (2 Bars)", bars: 2, preDelayDiv: 32 },
-  { name: "Large Room (1 Bar)", bars: 1, preDelayDiv: 64 },
-  { name: "Small Room (1/2 Note)", bars: 1 / 2, preDelayDiv: 128 },
-  { name: "Tight Ambience (1/4 Note)", bars: 1 / 4, preDelayDiv: 512 },
+  { name: "2 Bars", bars: 2, preDelayDiv: 32 }, // hall
+  { name: "1 Bar", bars: 1, preDelayDiv: 64 }, // large room
+  { name: "1/2 Note", bars: 1 / 2, preDelayDiv: 128 }, // small room
+  { name: "1/4 Note", bars: 1 / 4, preDelayDiv: 512 }, // tight ambience
 ];
 
 const roundMs = (ms) => parseFloat(ms.toFixed(2));
@@ -75,7 +77,8 @@ function reverbTimes(bpm) {
   const bar = 240000 / bpm;
   return REVERB_SIZES.map(({ name, bars, preDelayDiv }) => {
     const preDelay = bar / preDelayDiv;
-    return { name, preDelay: roundMs(preDelay), decay: roundMs(bar * bars - preDelay) };
+    const decayMs = bar * bars - preDelay;
+    return { name, preDelay: roundMs(preDelay), decay: (Math.floor(decayMs + 1e-6) / 1000).toFixed(3) };
   });
 }
 
@@ -92,7 +95,7 @@ async function copyFromCell(cell, text) {
 }
 
 // Three columns: Reverb size | Pre-delay | Decay time. Every cell copies its value on click
-// (numbers without the "ms", ready to paste into a plugin field).
+// (numbers without the unit, ready to paste into a plugin field).
 function buildReverbTable(bpm, { compact = false } = {}) {
   const table = document.createElement("table");
   table.className = `analysis-table reverb-table${compact ? " compact" : ""}`;
@@ -103,7 +106,7 @@ function buildReverbTable(bpm, { compact = false } = {}) {
   const body = table.createTBody();
   for (const { name, preDelay, decay } of reverbTimes(bpm)) {
     const row = body.insertRow();
-    for (const [shown, copied] of [[name, name], [`${preDelay} ms`, String(preDelay)], [`${decay} ms`, String(decay)]]) {
+    for (const [shown, copied] of [[name, name], [`${preDelay} ms`, String(preDelay)], [`${decay} s`, decay]]) {
       const cell = row.insertCell();
       cell.textContent = shown;
       cell.className = "copyable";
