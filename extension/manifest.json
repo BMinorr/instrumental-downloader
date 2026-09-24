@@ -21,7 +21,14 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["activeTab", "downloads", "storage", "scripting", "tabCapture", "offscreen"],
+  "permissions": [
+    "activeTab",
+    "downloads",
+    "storage",
+    "scripting",
+    "tabCapture",
+    "offscreen"
+  ],
   "host_permissions": [
     "http://127.0.0.1:5177/*",
     "*://*.youtube.com/*",
@@ -29,5 +36,14 @@
     "*://open.spotify.com/*",
     "*://*.instagram.com/*",
     "*://tunebat.com/*"
-  ]
+  ],
+  "commands": {
+    "toggle-recording": {
+      "suggested_key": {
+        "default": "Alt+Shift+R",
+        "mac": "Alt+Shift+R"
+      },
+      "description": "Start/stop recording the current tab (Sample)"
+    }
+  }
 }

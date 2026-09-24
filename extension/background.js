@@ -80,8 +80,36 @@ async function ensureOffscreenDocument() {
   });
 }
 
-async function startSampleRecording() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+// --- Toolbar badge: shows recording state even with the popup closed ---
+
+function setBadge(text, color) {
+  chrome.action.setBadgeText({ text });
+  if (color) chrome.action.setBadgeBackgroundColor({ color });
+}
+
+chrome.runtime.onInstalled.addListener(() => setBadge(""));
+
+// Keyboard shortcut (default Alt+Shift+R, changeable at chrome://extensions/shortcuts):
+// start/stop recording the current tab without opening the popup. The shortcut counts
+// as invoking the extension on that tab, which is what tabCapture requires.
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (command !== "toggle-recording") return;
+  try {
+    const status = await sampleStatus();
+    if (status.recording) {
+      await stopSampleRecording();
+      setBadge("✓", "#34d399"); // recording is ready — cleared when the popup is opened
+    } else {
+      await startSampleRecording(tab);
+    }
+  } catch (err) {
+    setBadge("!", "#f87171");
+    setTimeout(() => setBadge(""), 5000);
+  }
+});
+
+async function startSampleRecording(tabOverride) {
+  const tab = tabOverride || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
   if (!tab) throw new Error("No active tab found.");
 
   const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
@@ -95,12 +123,14 @@ async function startSampleRecording() {
   if (!response?.ok) throw new Error(response?.error || "Could not start recording.");
 
   await chrome.storage.local.remove("bundle:__sample__");
+  setBadge("REC", "#ef4444");
   return { ok: true };
 }
 
 async function stopSampleRecording() {
   const response = await chrome.runtime.sendMessage({ target: "offscreen", type: "stop" });
   if (!response?.ok) throw new Error(response?.error || "Could not stop recording.");
+  setBadge("");
   // The audio itself stays in the offscreen document's memory (see getLastSampleRecording) —
   // not persisted to chrome.storage, which caps out at 10MB and a several-minute
   // recording can exceed that.
@@ -112,6 +142,7 @@ async function discardSampleRecording() {
     await chrome.runtime.sendMessage({ target: "offscreen", type: "discard" });
   }
   await chrome.storage.local.remove("bundle:__sample__");
+  setBadge("");
   return { ok: true };
 }
 

@@ -42,6 +42,8 @@ const els = {
   settingStartTab: document.getElementById("setting-start-tab"),
   settingPrefetch: document.getElementById("setting-prefetch"),
   formatChips: document.getElementById("format-chips"),
+  recordingShortcut: document.getElementById("recording-shortcut"),
+  btnShortcuts: document.getElementById("btn-shortcuts"),
   appVersion: document.getElementById("app-version"),
   settingsServerText: document.getElementById("settings-server-text"),
   settingsBtnRecheck: document.getElementById("settings-btn-recheck"),
@@ -701,6 +703,9 @@ async function initSampleTab() {
   });
 
   const status = await sendToBackground({ type: "sample:status" });
+  // A recording finished with the keyboard shortcut leaves a "✓" on the toolbar icon;
+  // opening the popup is how you pick it up, so clear it.
+  if (!status?.recording) chrome.action?.setBadgeText({ text: "" });
   if (status?.recording) {
     enterRecordingUI(status.elapsedMs);
     return;
@@ -1171,6 +1176,17 @@ function buildFormatChips(selected) {
   }
 }
 
+// Shows the key currently bound to "toggle recording" (users can change it in Chrome).
+async function showRecordingShortcut() {
+  try {
+    const commands = await chrome.commands.getAll();
+    const command = commands.find((c) => c.name === "toggle-recording");
+    els.recordingShortcut.textContent = command?.shortcut || "not set";
+  } catch {
+    els.recordingShortcut.textContent = "Alt+Shift+R";
+  }
+}
+
 async function initSettingsTab() {
   const settings = await getSettings();
 
@@ -1200,6 +1216,8 @@ async function initSettingsTab() {
     el.addEventListener(eventName, () => chrome.storage.local.set({ [key]: read() }));
   }
 
+  showRecordingShortcut();
+  els.btnShortcuts.addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
   els.appVersion.textContent = chrome.runtime.getManifest?.().version || els.appVersion.textContent;
   els.settingsBtnRecheck.addEventListener("click", checkServer);
   els.settingsBtnClearCache.addEventListener("click", handleClearCache);
