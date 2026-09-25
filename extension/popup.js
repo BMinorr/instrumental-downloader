@@ -63,9 +63,7 @@ function ensureLinkLoaded() {
 
 // --- Detached window ---
 
-const DETACHED_WINDOW_KEY = "detachedWindowId"; // chrome.storage.session: ids are only valid within a browser session
 const ACTIVE_TAB_KEY = IS_DETACHED ? "activeTabDetached" : "activeTab"; // the two views remember their own tab
-const DETACHED_WIDTH = 336; // inner width: the 320px layout + room for a scrollbar
 
 // The button opens (or focuses) the small window and closes this popup. Inside the window the
 // button is hidden and the window is sized so the UI fits (frame sizes differ per OS).
@@ -76,35 +74,10 @@ function setupDetach() {
     fitDetachedWindow();
     return;
   }
-  els.btnDetach.addEventListener("click", openDetached);
-}
-
-async function openDetached() {
-  const stored = await chrome.storage.session.get(DETACHED_WINDOW_KEY);
-  const existing = stored[DETACHED_WINDOW_KEY];
-  if (existing != null) {
-    try {
-      const win = await chrome.windows.get(existing);
-      if (win.type === "popup") {
-        await chrome.windows.update(existing, { focused: true });
-        window.close();
-        return;
-      }
-    } catch {
-      // closed since: open a new one
-    }
-  }
-  const here = await chrome.windows.getCurrent();
-  const win = await chrome.windows.create({
-    url: chrome.runtime.getURL("popup.html?detached=1"),
-    type: "popup",
-    width: DETACHED_WIDTH + 16,
-    height: 700,
-    left: Math.max(0, (here.left ?? 0) + (here.width ?? 0) - DETACHED_WIDTH - 60),
-    top: (here.top ?? 0) + 60,
+  els.btnDetach.addEventListener("click", async () => {
+    await openDetachedWindow();
+    window.close();
   });
-  await chrome.storage.session.set({ [DETACHED_WINDOW_KEY]: win.id });
-  window.close();
 }
 
 // outer size = inner size + the window frame, which we can only measure from inside.

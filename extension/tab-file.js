@@ -44,6 +44,7 @@ function describeError(err) {
 }
 
 function initFileTab() {
+  fileResultCard.refresh(); // the (empty) tables are on screen from the start
   chrome.storage.onChanged.addListener((changes, area) => {
     const key = fileAnalysisKey();
     if (area === "local" && key && changes[key]) fileResultCard.refresh();

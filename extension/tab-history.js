@@ -38,25 +38,29 @@ function iconButton(html, title, onClick) {
   return button;
 }
 
-// The two-column table that shows what Tunebat found: BPM | Key. `state`: "pending" (spinner
-// cells while it's being analyzed), "done" (the values) or "failed" (dashes). No other text.
+// The two-column table that shows what Tunebat found: BPM | Key. `state`: "idle" (nothing to
+// analyze yet: empty cells), "pending" (a spinner in each cell while it's being analyzed), "done"
+// (the values) or "failed" (dashes). No other text. It is on screen from the start.
 function buildAnalysisTable(state, values = {}, { compact = false } = {}) {
   const table = document.createElement("table");
   table.className = `analysis-table${compact ? " compact" : ""}${state === "failed" ? " failed" : ""}`;
-  const cell = (tag, content) => {
-    const el = document.createElement(tag);
-    if (content instanceof Node) el.appendChild(content);
-    else el.textContent = content;
-    return el;
-  };
-  const spinner = () => Object.assign(document.createElement("span"), { className: "spinner small" });
   const head = table.createTHead().insertRow();
-  head.append(cell("th", "BPM"), cell("th", "Key"));
+  for (const label of ["BPM", "Key"]) head.appendChild(Object.assign(document.createElement("th"), { textContent: label }));
   const row = table.createTBody().insertRow();
-  if (state === "pending") row.append(cell("td", spinner()), cell("td", spinner()));
-  else if (state === "failed") row.append(cell("td", "—"), cell("td", "—"));
-  else row.append(cell("td", values.bpm ? String(Math.round(values.bpm)) : "—"), cell("td", values.key || "—"));
+  const content = {
+    idle: ["", ""],
+    pending: [null, null],
+    failed: ["—", "—"],
+    done: [values.bpm ? String(Math.round(values.bpm)) : "—", values.key || "—"],
+  }[state];
+  for (const text of content) fillCell(row.insertCell(), text);
   return table;
+}
+
+// A table cell: text, or (null) a loading spinner.
+function fillCell(cell, text) {
+  if (text === null) cell.appendChild(Object.assign(document.createElement("span"), { className: "spinner small" }));
+  else cell.textContent = text;
 }
 
 // Reverb settings that fit a tempo — same maths as anotherproducer.com's Delay & Reverb calculator.
@@ -94,32 +98,44 @@ async function copyFromCell(cell, text) {
   cell.copyTimer = setTimeout(() => cell.classList.remove("copied"), 700);
 }
 
-// Three columns: Reverb size | Pre-delay | Decay time. Every cell copies its value on click
-// (numbers without the unit, ready to paste into a plugin field).
-function buildReverbTable(bpm, { compact = false } = {}) {
+// Three columns: Reverb size | Pre-delay | Decay time. The sizes are always listed; the two
+// value columns are empty (idle), spinners (pending), dashes (failed) or the numbers (done, needs
+// the BPM). Every value cell copies its number (no unit, ready for a plugin field) on click.
+function buildReverbTable(state, bpm, { compact = false } = {}) {
   const table = document.createElement("table");
   table.className = `analysis-table reverb-table${compact ? " compact" : ""}`;
   const head = table.createTHead().insertRow();
   for (const label of ["Reverb size", "Pre-delay", "Decay time"]) {
     head.appendChild(Object.assign(document.createElement("th"), { textContent: label }));
   }
+  const values = state === "done" && bpm > 0 ? reverbTimes(bpm) : null;
+  const placeholder = { idle: "", pending: null, failed: "—", done: "—" }[state];
   const body = table.createTBody();
-  for (const { name, preDelay, decay } of reverbTimes(bpm)) {
+  REVERB_SIZES.forEach(({ name }, i) => {
     const row = body.insertRow();
-    for (const [shown, copied] of [[name, name], [`${preDelay} ms`, String(preDelay)], [`${decay} s`, decay]]) {
+    row.insertCell().textContent = name;
+    const cells = values
+      ? [[`${values[i].preDelay} ms`, String(values[i].preDelay)], [`${values[i].decay} s`, values[i].decay]]
+      : [[placeholder], [placeholder]];
+    for (const [shown, copied] of cells) {
       const cell = row.insertCell();
-      cell.textContent = shown;
-      cell.className = "copyable";
-      cell.title = "Click to copy";
-      cell.addEventListener("click", () => copyFromCell(cell, copied));
+      fillCell(cell, shown);
+      if (copied !== undefined) {
+        cell.className = "copyable";
+        cell.title = "Click to copy";
+        cell.addEventListener("click", () => copyFromCell(cell, copied));
+      }
     }
-  }
+  });
   return table;
 }
 
-// The reverb table for an analyzed entry (needs the BPM), or null.
+// The reverb table that goes under an entry's BPM/Key table. History rows leave it out for a
+// failed analysis (nothing to calculate, and the row is already busy).
 function reverbTableFor(entry, options) {
-  return analysisState(entry) === "done" && entry.bpm > 0 ? buildReverbTable(entry.bpm, options) : null;
+  const state = entry && entry.analysis ? analysisState(entry) : "idle";
+  if (options?.compact && state === "failed") return null;
+  return buildReverbTable(state, entry?.bpm, options);
 }
 
 // "pending" | "done" | "failed" from an entry's `analysis` field (pending/analyzing both spin).
@@ -236,7 +252,9 @@ function initHistoryTab() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes[HISTORY_KEY]) return;
     if (!els.panelHistory.classList.contains("hidden")) renderHistory();
-    for (const card of resultCards) card.refresh();
+    loadHistory().then((list) => {
+      for (const card of resultCards) card.refresh(list); // one read for every card
+    });
   });
 }
 
@@ -246,8 +264,8 @@ const resultCards = new Set();
 
 function createResultCard(el, pick) {
   const card = {
-    async refresh() {
-      const entry = pick(await loadHistory());
+    async refresh(list) {
+      const entry = pick(list || (await loadHistory()));
       renderResultCard(el, entry, entry && (() => chrome.runtime.sendMessage({ type: "analysis:retry", historyId: entry.id })));
     },
   };
@@ -256,14 +274,14 @@ function createResultCard(el, pick) {
   return card;
 }
 
+// Always on screen: empty cells before anything happened, spinners while it's being analyzed.
 function renderResultCard(el, entry, onRetry) {
   el.replaceChildren();
-  el.classList.toggle("hidden", !entry || !entry.analysis);
-  if (!entry || !entry.analysis) return;
-  el.appendChild(buildAnalysisTable(analysisState(entry), entry));
-  const reverb = reverbTableFor(entry);
-  if (reverb) el.appendChild(reverb);
-  if (entry.analysis === "failed" && onRetry) {
+  el.classList.remove("hidden");
+  const state = entry && entry.analysis ? analysisState(entry) : "idle";
+  el.appendChild(buildAnalysisTable(state, entry || {}));
+  el.appendChild(reverbTableFor(entry));
+  if (state === "failed" && onRetry) {
     const retry = iconButton(ICON_RETRY, "Try again", onRetry);
     retry.classList.add("result-retry");
     el.appendChild(retry);

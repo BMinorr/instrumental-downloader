@@ -119,6 +119,7 @@ const SETTING_KEYS = {
   closeTunebatTab: "settings.closeTunebatTab",
   queueConcurrency: "settings.queueConcurrency",
   autoUpdateCheck: "settings.autoUpdateCheck",
+  openDetached: "settings.openDetached",
 };
 const LEGACY_NORMALIZE_KEY = "settings.loudnorm"; // single toggle from before there was one per category
 const LEGACY_ANALYZE_KEY = "settings.analyze"; // ditto for the Tunebat analysis
@@ -163,6 +164,7 @@ async function getSettings() {
     deleteOriginal: items[SETTING_KEYS.deleteOriginal] ?? true,
     closeTunebatTab: items[SETTING_KEYS.closeTunebatTab] ?? true,
     autoUpdateCheck: items[SETTING_KEYS.autoUpdateCheck] ?? true,
+    openDetached: items[SETTING_KEYS.openDetached] ?? false,
     queueConcurrency: [1, 2, 3].includes(Number(items[SETTING_KEYS.queueConcurrency])) ? Number(items[SETTING_KEYS.queueConcurrency]) : 2,
   };
 }
@@ -352,3 +354,36 @@ function formatDuration(seconds) {
 
 // Checks the local server and shows the result in Settings > Local server (dot + text),
 // plus a red dot on the Settings gear while it's unreachable so it's visible from any tab.
+
+// --- Detached window (popup.html?detached=1): the extension in its own small Chrome window ---
+
+const DETACHED_WINDOW_KEY = "detachedWindowId"; // chrome.storage.session: ids are only valid within a browser session
+const DETACHED_WIDTH = 336; // inner width: the 320px layout + room for a scrollbar
+
+// Opens the window, or focuses it when it's already open. Used by the popup's Detached button
+// and by the toolbar button when "Open in pop-out window" is on (background.js).
+async function openDetachedWindow() {
+  const stored = await chrome.storage.session.get(DETACHED_WINDOW_KEY);
+  const existing = stored[DETACHED_WINDOW_KEY];
+  if (existing != null) {
+    try {
+      const win = await chrome.windows.get(existing);
+      if (win.type === "popup") {
+        await chrome.windows.update(existing, { focused: true });
+        return;
+      }
+    } catch {
+      // closed since: open a new one
+    }
+  }
+  const here = await chrome.windows.getLastFocused();
+  const win = await chrome.windows.create({
+    url: chrome.runtime.getURL("popup.html?detached=1"),
+    type: "popup",
+    width: DETACHED_WIDTH + 16,
+    height: 700,
+    left: Math.max(0, (here.left ?? 0) + (here.width ?? 0) - DETACHED_WIDTH - 60),
+    top: (here.top ?? 0) + 60,
+  });
+  await chrome.storage.session.set({ [DETACHED_WINDOW_KEY]: win.id });
+}

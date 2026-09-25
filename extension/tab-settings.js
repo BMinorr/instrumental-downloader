@@ -359,6 +359,7 @@ async function initSettingsTab() {
   els.settingDeleteOriginal.checked = settings.deleteOriginal;
   els.settingCloseTunebat.checked = settings.closeTunebatTab;
   els.settingAutoUpdate.checked = settings.autoUpdateCheck;
+  els.settingOpenDetached.checked = settings.openDetached;
   buildFormatChips(settings.formats);
   buildTabsList(settings);
   buildStartTabSelect(settings);
@@ -382,6 +383,7 @@ async function initSettingsTab() {
     [els.settingDeleteOriginal, SETTING_KEYS.deleteOriginal, "change", checkbox(els.settingDeleteOriginal)],
     [els.settingCloseTunebat, SETTING_KEYS.closeTunebatTab, "change", checkbox(els.settingCloseTunebat)],
     [els.settingAutoUpdate, SETTING_KEYS.autoUpdateCheck, "change", checkbox(els.settingAutoUpdate)],
+    [els.settingOpenDetached, SETTING_KEYS.openDetached, "change", checkbox(els.settingOpenDetached)],
   ];
   for (const [el, key, eventName, read] of bindings) {
     el.addEventListener(eventName, () => chrome.storage.local.set({ [key]: read() }));

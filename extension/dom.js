@@ -24,7 +24,6 @@ const els = {
 
   // Link
   pasteInput: $("paste-input"),
-  pasteGo: $("paste-go"),
   statusMessage: $("status-message"),
   batchCard: $("batch-card"),
   batchSummary: $("batch-summary"),
@@ -117,6 +116,7 @@ const els = {
   btnAppUpdate: $("btn-app-update"),
   btnCheckUpdates: $("btn-check-updates"),
   settingAutoUpdate: $("setting-auto-update"),
+  settingOpenDetached: $("setting-open-detached"),
   appVersion: $("app-version"),
 };
 

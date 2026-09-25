@@ -89,6 +89,18 @@ function setBadge(text, color) {
   if (color) chrome.action.setBadgeBackgroundColor({ color });
 }
 
+// "Open in pop-out window": with the setting on, the toolbar button has no dropdown and opens the
+// detached window instead (setPopup is per browser session, so this runs on every worker start).
+async function applyActionMode() {
+  const { openDetached } = await getSettings();
+  await chrome.action.setPopup({ popup: openDetached ? "" : "popup.html" });
+}
+chrome.action.onClicked.addListener(() => openDetachedWindow().catch(() => {}));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && SETTING_KEYS.openDetached in changes) applyActionMode().catch(() => {});
+});
+applyActionMode().catch(() => {});
+
 chrome.runtime.onInstalled.addListener(() => setBadge(""));
 chrome.runtime.onStartup.addListener(() => {
   resumeQueue();

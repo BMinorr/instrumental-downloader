@@ -116,7 +116,6 @@ function initPasteRow() {
   });
   // Lets the pasted text land, then acts on it — so pasting is all it takes.
   els.pasteInput.addEventListener("paste", () => setTimeout(submitPaste, 0));
-  els.pasteGo.addEventListener("click", submitPaste);
 
   els.queueRetry.addEventListener("click", () => sendToBackground({ type: "queue:retry" }));
   els.queueClearDone.addEventListener("click", () => sendToBackground({ type: "queue:clear", scope: "done" }));

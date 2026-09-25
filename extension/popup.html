@@ -13,9 +13,9 @@
         <button id="tab-sample" class="tab-btn" title="Sample" aria-label="Sample"><svg class="tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg><span class="tab-label">Sample</span></button>
       </div>
       <div id="header-right">
-        <button id="btn-detach" class="tab-btn" title="Detached: open in its own small window" aria-label="Detached: open in its own small window"><svg class="tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg><span class="tab-label">Detached</span></button>
         <button id="tab-history" class="tab-btn" title="History" aria-label="History"><svg class="tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span class="tab-label">History</span></button>
         <button id="tab-settings" class="tab-btn" title="Settings" aria-label="Settings"><svg class="tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span class="tab-label">Settings</span></button>
+        <button id="btn-detach" class="tab-btn" title="Detached: open in its own small window" aria-label="Detached: open in its own small window"><svg class="tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></button>
       </div>
     </header>
 
@@ -44,18 +44,12 @@
 
         <p id="file-progress" class="hidden"></p>
 
-        <div id="file-result-card" class="result-card hidden"></div>
+        <div id="file-result-card" class="result-card"></div>
       </div>
 
       <div id="panel-link" class="hidden">
         <div id="paste-row">
-          <textarea id="paste-input" class="text-input" rows="1" placeholder="Paste a link — or several, or a playlist" spellcheck="false" autocomplete="off"></textarea>
-          <button id="paste-go" class="icon-btn neutral" aria-label="Load link" title="Load link (Enter)">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
-          </button>
+          <textarea id="paste-input" class="text-input" rows="1" placeholder="Paste links or a playlist" spellcheck="false" autocomplete="off"></textarea>
         </div>
 
         <p id="status-message" class="hidden"></p>
@@ -78,7 +72,7 @@
 
         <p id="progress" class="hidden"></p>
 
-        <div id="link-result-card" class="result-card hidden"></div>
+        <div id="link-result-card" class="result-card"></div>
 
         <div id="queue-section" class="hidden">
           <p id="queue-summary" class="queue-summary"></p>
@@ -137,8 +131,10 @@
 
           <p id="sample-progress" class="hidden"></p>
 
-          <div id="sample-result-card" class="result-card hidden"></div>
+          
         </div>
+
+        <div id="sample-result-card" class="result-card"></div>
 
         <div id="sample-record-area">
           <div id="sample-level-meter" class="hidden">
@@ -267,6 +263,10 @@
             <span>Open on</span>
             <select id="setting-start-tab" class="settings-input"></select>
           </div>
+                    <label class="settings-row" data-tip="Clicking the extension icon opens it straight in its own small window instead of the dropdown. Use the gear inside to switch back.">
+            <span>Open in pop-out window</span>
+            <span class="switch"><input type="checkbox" id="setting-open-detached" /><span class="switch-track"></span></span>
+          </label>
           <div class="settings-row" data-tip="How many queued links download at the same time. Lower is gentler on a slow computer.">
             <span>Queue: downloads at once</span>
             <select id="setting-queue-concurrency" class="settings-input">
@@ -329,7 +329,7 @@
           <p class="meta">Forgets remembered track info and the last active tab. Keeps your settings, history and download queue, and doesn't touch saved files.</p>
         </section>
 
-        <p class="meta settings-version">Downloader v<span id="app-version">0.1.0</span> by <a href="https://bminorr.github.io/" target="_blank" rel="noopener noreferrer">B Minor</a></p>
+        <p class="meta settings-version">Downloader v<span id="app-version"></span> by <a href="https://bminorr.github.io/" target="_blank" rel="noopener noreferrer">B Minor</a></p>
       </div>
     </main>
 

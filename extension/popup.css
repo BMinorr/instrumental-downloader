@@ -1025,18 +1025,6 @@ kbd {
   background: var(--accent-hover);
 }
 
-.analysis {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(108, 92, 231, 0.14);
-  border: 1px solid rgba(108, 92, 231, 0.4);
-}
-
 /* ---- Link tab: paste box, batch card ---- */
 #paste-row {
   align-items: flex-start;

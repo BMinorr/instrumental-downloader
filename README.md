@@ -369,8 +369,18 @@ Fiecare opțiune din Settings are un **ⓘ** mic după nume: click = o explicaț
 
 ## Fereastra „Detached"
 
-Butonul **Detached** din antet (pictograma cu săgeata în afară, între taburi și History) deschide extensia într-o **fereastră mică de Chrome** (nu fullscreen), dimensionată cât să încapă interfața (lățime ~336 px, înălțime până la 680 px, poziționată lângă fereastra curentă); popup-ul se închide. Un al doilea click pe buton aduce în față fereastra deja deschisă, nu face alta. În fereastra detașată:
+Butonul **Detached** (doar pictograma, fără text; în antet, în dreapta rotiței Settings) deschide extensia într-o **fereastră mică de Chrome** (nu fullscreen), dimensionată cât să încapă interfața (lățime ~336 px, înălțime până la 680 px, poziționată lângă fereastra curentă); popup-ul se închide. Un al doilea click aduce în față fereastra deja deschisă, nu face alta. În fereastra detașată:
 - **Link** folosește doar link-urile pe care le lipești tu în interfață (nu ia pagina din tab-ul curent);
 - **Sample** e ascuns (înregistrarea din tab n-are sens acolo);
-- File, History și Settings merg la fel; fereastra rămâne deschisă cât lucrezi în alte ferestre, iar dialogul de alegere a fișierului nu o mai închide (la popup-ul obișnuit se putea);
+- File, History și Settings merg la fel; dialogul de alegere a fișierului nu mai închide fereastra (la popup-ul obișnuit se putea);
 - își ține minte propriul tab activ, separat de popup.
+
+**Settings → General → „Open in pop-out window"** (oprit implicit): când e pornit, un click pe pictograma extensiei din Chrome deschide direct fereastra detașată, fără dropdown (dacă e deja deschisă, o aduce în față). Se oprește din rotița din fereastra detașată.
+
+## Tabelele BPM/Key și reverb: mereu pe ecran
+
+Cele două tabele (BPM | Key și Reverb size | Pre-delay | Decay time) apar **din start** în Link, File și Sample (și în rândurile din History): goale înainte să se întâmple ceva, cu un **cerc de încărcare** în fiecare celulă cât timp Tunebat analizează, apoi cu valorile (click pe o valoare = copiată). La eșec celulele arată „—".
+
+## Versionare
+
+Versiunea curentă e **1.0.0** (`extension/manifest.json`, afișată în Settings). Corecțiile mici, retușurile vizuale și schimbările de backend cresc ultima cifră (1.0.1, 1.0.2…); o funcționalitate nouă crește cifra din mijloc (1.1.0).

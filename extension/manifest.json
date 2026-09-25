@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Downloader",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Download instrumentals sent by clients (YouTube, Spotify, Instagram) as MP3 320kbps or WAV.",
   "action": {
     "default_popup": "popup.html",
