@@ -1379,3 +1379,9 @@ kbd {
 .settings-section .update-status {
   margin: -4px 0 10px;
 }
+
+/* ---- Detached window: fluid width (the window can be resized), full-height page ---- */
+body.detached {
+  width: auto;
+  min-height: 100vh;
+}

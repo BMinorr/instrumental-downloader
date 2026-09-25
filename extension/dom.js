@@ -3,9 +3,14 @@
 
 const $ = (id) => document.getElementById(id);
 
+// The popup can also live in its own small Chrome window ("Detached", popup.html?detached=1):
+// there Link only uses the links you give it (no current-tab page) and Sample is hidden.
+const IS_DETACHED = new URLSearchParams(location.search).get("detached") === "1";
+
 const els = {
   // header / tabs
   tabsBar: $("tabs"),
+  btnDetach: $("btn-detach"),
   tabFile: $("tab-file"),
   tabLink: $("tab-link"),
   tabSample: $("tab-sample"),

@@ -426,7 +426,7 @@ async function handleResetSettings() {
 async function handleClearCache() {
   const all = await chrome.storage.local.get(null);
   const keysToRemove = Object.keys(all).filter(
-    (k) => k === "activeTab" || k.startsWith("bundle:") || k.startsWith("pendingDownload:") || k.startsWith("analysis:") || k.startsWith(FILE_ANALYSIS_PREFIX)
+    (k) => k === "activeTab" || k === "activeTabDetached" || k.startsWith("bundle:") || k.startsWith("pendingDownload:") || k.startsWith("analysis:") || k.startsWith(FILE_ANALYSIS_PREFIX)
   );
   if (keysToRemove.length) await chrome.storage.local.remove(keysToRemove);
 

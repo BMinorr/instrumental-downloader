@@ -32,6 +32,7 @@ let activeTabInfo = { url: "", title: "", ready: false };
 let linkLoaded = false;
 
 async function main() {
+  setupDetach();
   getSettings().then((settings) => applyVisibleFormats(settings.formats));
   initFileTab();
   initHistoryTab();
@@ -41,7 +42,8 @@ async function main() {
   // Tab restore (storage read) and the active-tab lookup don't depend on each other.
   const [, [tab]] = await Promise.all([
     setupTabs(),
-    chrome.tabs.query({ active: true, currentWindow: true }),
+    // Detached window: its own "current tab" is this page, so Link only uses pasted links.
+    IS_DETACHED ? [] : chrome.tabs.query({ active: true, currentWindow: true }),
   ]);
   activeTabInfo = { url: tab?.url || "", title: tab?.title || "", ready: true };
   initPasteRow();
@@ -59,6 +61,66 @@ function ensureLinkLoaded() {
   loadLink(activeTabInfo.url, { tabTitle: activeTabInfo.title });
 }
 
+// --- Detached window ---
+
+const DETACHED_WINDOW_KEY = "detachedWindowId"; // chrome.storage.session: ids are only valid within a browser session
+const ACTIVE_TAB_KEY = IS_DETACHED ? "activeTabDetached" : "activeTab"; // the two views remember their own tab
+const DETACHED_WIDTH = 336; // inner width: the 320px layout + room for a scrollbar
+
+// The button opens (or focuses) the small window and closes this popup. Inside the window the
+// button is hidden and the window is sized so the UI fits (frame sizes differ per OS).
+function setupDetach() {
+  if (IS_DETACHED) {
+    els.btnDetach.classList.add("hidden");
+    document.body.classList.add("detached");
+    fitDetachedWindow();
+    return;
+  }
+  els.btnDetach.addEventListener("click", openDetached);
+}
+
+async function openDetached() {
+  const stored = await chrome.storage.session.get(DETACHED_WINDOW_KEY);
+  const existing = stored[DETACHED_WINDOW_KEY];
+  if (existing != null) {
+    try {
+      const win = await chrome.windows.get(existing);
+      if (win.type === "popup") {
+        await chrome.windows.update(existing, { focused: true });
+        window.close();
+        return;
+      }
+    } catch {
+      // closed since: open a new one
+    }
+  }
+  const here = await chrome.windows.getCurrent();
+  const win = await chrome.windows.create({
+    url: chrome.runtime.getURL("popup.html?detached=1"),
+    type: "popup",
+    width: DETACHED_WIDTH + 16,
+    height: 700,
+    left: Math.max(0, (here.left ?? 0) + (here.width ?? 0) - DETACHED_WIDTH - 60),
+    top: (here.top ?? 0) + 60,
+  });
+  await chrome.storage.session.set({ [DETACHED_WINDOW_KEY]: win.id });
+  window.close();
+}
+
+// outer size = inner size + the window frame, which we can only measure from inside.
+async function fitDetachedWindow() {
+  try {
+    const win = await chrome.windows.getCurrent();
+    const frame = (outer, inner) => Math.min(120, Math.max(0, outer - inner)); // sanity-clamped
+    const frameW = frame(window.outerWidth, window.innerWidth);
+    const frameH = frame(window.outerHeight, window.innerHeight);
+    const innerH = Math.min(screen.availHeight - frameH - 60, 680);
+    await chrome.windows.update(win.id, { width: DETACHED_WIDTH + frameW, height: innerH + frameH });
+  } catch {
+    // keep the size it opened with
+  }
+}
+
 // --- Tabs ---
 
 const TAB_ELEMENTS = {
@@ -72,7 +134,8 @@ let visibleTabs = TABS.map((t) => t.id);
 
 // Order (left group) and visibility come from Settings (Settings itself is always available).
 function applyTabSettings(settings) {
-  visibleTabs = settings.visibleTabs;
+  visibleTabs = IS_DETACHED ? settings.visibleTabs.filter((id) => id !== "sample") : settings.visibleTabs;
+  if (!visibleTabs.length) visibleTabs = [settings.tabOrder.find((id) => id !== "sample")];
   for (const id of settings.tabOrder) {
     const button = TAB_ELEMENTS[id][0];
     if (TABS.find((t) => t.id === id).side === "left") els.tabsBar.appendChild(button); // re-appending moves it: this is the reordering
@@ -91,8 +154,8 @@ async function setupTabs() {
   });
 
   // Remember whichever tab was open last, so reopening the popup lands back on it.
-  const stored = await chrome.storage.local.get("activeTab");
-  const wanted = settings.startTab === "last" ? stored.activeTab : settings.startTab;
+  const stored = await chrome.storage.local.get(ACTIVE_TAB_KEY);
+  const wanted = settings.startTab === "last" ? stored[ACTIVE_TAB_KEY] : settings.startTab;
   const fallback = visibleTabs.includes("link") ? "link" : visibleTabs[0];
   switchTab(wanted === "settings" || visibleTabs.includes(wanted) ? wanted : fallback);
 }
@@ -104,7 +167,7 @@ function switchTab(which) {
     button.classList.toggle("active", isActive);
     panel.classList.toggle("hidden", !isActive);
   }
-  chrome.storage.local.set({ activeTab: which });
+  chrome.storage.local.set({ [ACTIVE_TAB_KEY]: which });
   if (which === "settings") onSettingsOpened();
   if (which === "history") renderHistory();
   if (which === "link") ensureLinkLoaded();

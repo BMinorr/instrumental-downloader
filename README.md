@@ -366,3 +366,11 @@ instrumental-downloader/
 Settings → **Updates → Downloader**: serverul face `git fetch` și compară cu `origin` (la deschiderea extensiei, cel mult o dată la 6 ore, dacă „Check automatically" e pornit). Dacă există ceva nou apare **Update** (și un punct albastru pe rotiță). Apăsat, serverul rulează `git pull --ff-only`, `npm install` doar dacă s-a schimbat `package.json`, apoi **se repornește singur** (Mac: launchd îl repornește; Windows: un mic proces ajutător) și extensia se **reîncarcă singură** (`chrome.runtime.reload()`), deci nu mai e nevoie de ↻ manual. Nu merge dacă folderul nu e clonat cu Git sau are fișiere modificate de mână (mesajul spune asta). Prima dată, pe un calculator care n-are încă funcția, rulează o dată `update.sh` / `update.ps1`.
 
 Fiecare opțiune din Settings are un **ⓘ** mic după nume: click = o explicație de 1–2 propoziții.
+
+## Fereastra „Detached"
+
+Butonul **Detached** din antet (pictograma cu săgeata în afară, între taburi și History) deschide extensia într-o **fereastră mică de Chrome** (nu fullscreen), dimensionată cât să încapă interfața (lățime ~336 px, înălțime până la 680 px, poziționată lângă fereastra curentă); popup-ul se închide. Un al doilea click pe buton aduce în față fereastra deja deschisă, nu face alta. În fereastra detașată:
+- **Link** folosește doar link-urile pe care le lipești tu în interfață (nu ia pagina din tab-ul curent);
+- **Sample** e ascuns (înregistrarea din tab n-are sens acolo);
+- File, History și Settings merg la fel; fereastra rămâne deschisă cât lucrezi în alte ferestre, iar dialogul de alegere a fișierului nu o mai închide (la popup-ul obișnuit se putea);
+- își ține minte propriul tab activ, separat de popup.

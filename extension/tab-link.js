@@ -24,7 +24,9 @@ async function loadLink(url, { tabTitle = "", pasted = false } = {}) {
   if (platform === "unknown") {
     els.statusMessage.textContent = pasted
       ? "That doesn't look like a YouTube, Spotify or Instagram link."
-      : "Open a YouTube video, a Spotify track or an Instagram Story/Reel/Post — or paste a link above.";
+      : IS_DETACHED
+        ? "Paste a YouTube, Spotify or Instagram link above."
+        : "Open a YouTube video, a Spotify track or an Instagram Story/Reel/Post — or paste a link above.";
     els.statusMessage.classList.remove("hidden");
     checkServer();
     return;
