@@ -33,6 +33,8 @@ Repo-ul e public, iar installer-ul instalează **tot**: Git, Node.js, ffmpeg, yt
 
 **De ce rămâne valabil în timp:** fișierul `.bat`/`.command` conține doar adresa installer-ului, care se descarcă de fiecare dată **în versiunea de atunci** și instalează ultima versiune a aplicației. Deci un fișier primit la v0.1.0 instalează corect și peste un an. După instalare, actualizările vin din extensie (Settings → Updates). Installer-ul se poate rula oricând din nou (repară ce lipsește, aduce ultima versiune). Aplicația se instalează în `~/InstrumentalDownloader` (Windows: `%USERPROFILE%\InstrumentalDownloader`).
 
+**Pornirea automată pe Windows nu cere Admin** (task doar pentru utilizatorul curent). Dacă există deja un task `InstrumentalDownloaderServer` creat cu drepturi de Administrator și nu poate fi înlocuit, installer-ul îți spune clar ce să faci (rulează o dată ca Administrator sau șterge task-ul din Task Scheduler) și pornește serverul pentru sesiunea curentă.
+
 Instalarea manuală, pas cu pas, e descrisă mai jos.
 
 ### Pe Mac (acasă / testare)
@@ -383,4 +385,4 @@ Cele două tabele (BPM | Key și Reverb size | Pre-delay | Decay time) apar **di
 
 ## Versionare
 
-Versiunea curentă e **1.0.0** (`extension/manifest.json`, afișată în Settings). Corecțiile mici, retușurile vizuale și schimbările de backend cresc ultima cifră (1.0.1, 1.0.2…); o funcționalitate nouă crește cifra din mijloc (1.1.0).
+Versiunea curentă e **1.0.1** (`extension/manifest.json`, afișată în Settings). Corecțiile mici, retușurile vizuale și schimbările de backend cresc ultima cifră (1.0.1, 1.0.2…); o funcționalitate nouă crește cifra din mijloc (1.1.0).

@@ -78,8 +78,16 @@ try {
     if ($npmExit -ne 0) { throw "npm install a esuat." }
 
     Step "4/5 Pornire automata a serverului la fiecare logon"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "autostart\windows\install.ps1")
-    Test-Command "Instalarea pornirii automate"
+    $autostartScript = Join-Path $InstallDir "autostart\windows\install.ps1"
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $autostartScript
+    $autostartOk = ($LASTEXITCODE -eq 0)
+    $autostartWarning = "ATENTIE: pornirea automata NU s-a instalat (vezi mesajul de mai sus). Aplicatia merge, dar serverul nu porneste singur dupa restart. Cel mai des exista deja un task 'InstrumentalDownloaderServer' creat cu drepturi de Administrator. Rezolvare: ruleaza o singura data, intr-un PowerShell 'Run as administrator': powershell -ExecutionPolicy Bypass -File `"$autostartScript`" - sau sterge task-ul din Task Scheduler (taskschd.msc) si ruleaza din nou installer-ul."
+    if (-not $autostartOk) {
+        Write-Host ""
+        Write-Host "  $autostartWarning" -ForegroundColor Yellow
+        # Cat instalarea ramane utilizabila: pornim serverul acum, pentru aceasta sesiune.
+        Start-Process -FilePath "node" -ArgumentList "server.js" -WorkingDirectory (Join-Path $InstallDir "server") -WindowStyle Hidden
+    }
     $healthy = $false
     for ($i = 0; $i -lt 20 -and -not $healthy; $i++) {
         try {
@@ -106,6 +114,10 @@ try {
     Write-Host "  4. (optional) Apasa iconita de puzzle din Chrome si fixeaza extensia."
     Write-Host ""
     Write-Host "Dupa asta, actualizarile se fac din extensie: Settings -> Updates." -ForegroundColor Green
+    if (-not $autostartOk) {
+        Write-Host ""
+        Write-Host $autostartWarning -ForegroundColor Yellow
+    }
 } catch {
     Write-Host ""
     Write-Host "EROARE: $($_.Exception.Message)" -ForegroundColor Red
