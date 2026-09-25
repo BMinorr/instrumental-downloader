@@ -102,8 +102,8 @@ function selectFile(file) {
   selectedFile = file;
   els.fileDropzone.classList.toggle("has-file", !!file);
   els.fileClear.classList.toggle("hidden", !file);
-  // Nothing to convert until a file is chosen.
-  els.fileFormatOptions.classList.toggle("hidden", !file);
+  // Nothing to convert until a file is chosen: the buttons stay, greyed out.
+  fileGrid.setEnabled(!!file);
   fileResultCard.refresh();
   if (file) startFileAnalysis(); // no button: adding the file is what sends it to Tunebat
   els.fileDropzoneTitle.textContent = file ? file.name : "Drop an audio file here";

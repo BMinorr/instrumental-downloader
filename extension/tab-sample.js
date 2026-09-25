@@ -11,6 +11,16 @@ const sampleResultCard = createResultCard(els.sampleResultCard, (history) =>
   lastSampleBlob ? history.find((e) => e.source === "sample" && Date.now() - e.ts < 15 * 60 * 1000) || null : null
 );
 
+// Everything below the record button (name, waveform, trim/fades, format buttons) is on screen
+// from the start, greyed out until there is a recording to work on.
+function setSampleEmpty(empty) {
+  els.sampleResult.classList.toggle("empty", empty);
+  for (const el of [els.sampleFilename, els.sampleBtnDiscard, els.samplePlayBtn, els.sampleBtnTrimSilence, els.sampleFadeIn, els.sampleFadeOut]) {
+    el.disabled = empty;
+  }
+  sampleGrid.setEnabled(!empty);
+}
+
 function formatTimer(ms) {
   const totalSeconds = Math.floor(ms / 1000);
   const m = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
@@ -19,6 +29,7 @@ function formatTimer(ms) {
 }
 
 async function initSampleTab() {
+  setSampleEmpty(true);
   els.sampleRecordBtn.addEventListener("click", handleRecordClick);
   els.sampleBtnDiscard.addEventListener("click", handleDiscardRecording);
   setupSamplePlayer();
@@ -68,7 +79,7 @@ async function startSampleRecordingFlow() {
   try {
     const res = await sendToBackground({ type: "sample:start" });
     if (!res?.ok) throw new Error(res?.error || "Could not start recording.");
-    els.sampleResult.classList.add("hidden");
+    setSampleEmpty(true);
     enterRecordingUI(0);
   } catch (err) {
     els.sampleStatus.textContent = `Error: ${err.message}`;
@@ -376,7 +387,7 @@ function showSampleResult(audioBase64, durationMs) {
   els.sampleAudio.src = URL.createObjectURL(lastSampleBlob);
   els.sampleAudio.pause();
   els.samplePlayBtn.classList.remove("playing");
-  els.sampleResult.classList.remove("hidden");
+  setSampleEmpty(false);
   els.sampleFilename.value = defaultSampleFilename();
 
   const durationLabel = typeof durationMs === "number" ? ` (${formatTimer(durationMs)})` : "";
@@ -445,7 +456,7 @@ async function handleDiscardRecording() {
   silenceBounds = null;
   els.sampleFadeIn.value = "0";
   els.sampleFadeOut.value = "0";
-  els.sampleResult.classList.add("hidden");
+  setSampleEmpty(true);
   els.sampleAudio.pause();
   els.sampleAudio.removeAttribute("src");
   els.samplePlayBtn.classList.remove("playing");

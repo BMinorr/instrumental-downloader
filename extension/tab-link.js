@@ -58,7 +58,8 @@ async function loadLink(url, { tabTitle = "", pasted = false } = {}) {
     els.statusMessage.textContent = "Start the local server (server/npm start) to download.";
     els.statusMessage.classList.remove("hidden");
     els.trackInfo.classList.add("hidden");
-    els.formatOptions.classList.add("hidden");
+    linkGrid.setLoading(false);
+    linkGrid.setEnabled(false);
     return;
   }
 
@@ -77,7 +78,9 @@ function resetLinkView() {
   els.statusMessage.classList.add("hidden");
   els.batchCard.classList.add("hidden");
   els.trackInfo.classList.add("hidden");
-  els.formatOptions.classList.add("hidden");
+  els.formatOptions.classList.remove("hidden"); // the buttons stay on screen, greyed out until there is a link
+  linkGrid.setLoading(false);
+  linkGrid.setEnabled(false);
   els.progress.classList.add("hidden");
   els.progress.textContent = "";
   els.thumbnail.removeAttribute("src");
@@ -193,6 +196,7 @@ async function prepareBatch(urls) {
   els.statusMessage.classList.toggle("hidden", notes.length === 0);
   els.batchSummary.textContent = `${items.length} track${items.length > 1 ? "s" : ""} ready`;
   els.batchCard.classList.remove("hidden");
+  els.formatOptions.classList.add("hidden"); // the batch card has its own format buttons
 }
 
 async function addBatchToQueue(format) {
@@ -207,6 +211,7 @@ async function addBatchToQueue(format) {
     growPasteInput();
     pendingBatch = null;
     els.batchCard.classList.add("hidden");
+    els.formatOptions.classList.remove("hidden");
     els.statusMessage.textContent =
       `Added ${response.added} to the queue — it keeps going with this window closed.` +
       (already > 0 ? ` ${already} already in the queue.` : "");
@@ -330,7 +335,8 @@ async function handleDirect(url, stale = () => false) {
     els.statusMessage.textContent = `Error: ${withYtdlpHint(err.message)}`;
     els.statusMessage.classList.remove("hidden");
     els.trackInfo.classList.add("hidden");
-    els.formatOptions.classList.add("hidden");
+    linkGrid.setLoading(false);
+    linkGrid.setEnabled(false);
   }
 }
 
@@ -354,7 +360,8 @@ async function handleSpotify(spotifyUrl, stale = () => false) {
     els.statusMessage.textContent = `Error: ${withYtdlpHint(err.message)}`;
     els.statusMessage.classList.remove("hidden");
     els.trackInfo.classList.add("hidden");
-    els.formatOptions.classList.add("hidden");
+    linkGrid.setLoading(false);
+    linkGrid.setEnabled(false);
   }
 }
 
@@ -374,8 +381,8 @@ function renderTrack(mediaUrl, data) {
     .filter(Boolean)
     .join(" · ");
 
-  els.formatOptions.classList.remove("hidden");
   linkGrid.setLoading(false);
+  linkGrid.setEnabled(true);
   linkResultCard.refresh();
 }
 

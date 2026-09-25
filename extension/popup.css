@@ -43,7 +43,7 @@ header {
   gap: 2px;
 }
 
-/* Icon tabs: the text shows next to the icon of the active tab (and while hovering one). */
+/* Icon tabs: the text shows next to the icon of the selected tab only (hovering just lights the icon). */
 .tab-btn {
   appearance: none;
   position: relative;
@@ -93,8 +93,6 @@ header {
   color: var(--accent-hover);
 }
 
-.tab-btn:hover .tab-label,
-.tab-btn:focus-visible .tab-label,
 .tab-btn.active .tab-label {
   max-width: 70px;
   margin-left: 6px;
@@ -503,6 +501,13 @@ main {
 .format-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Nothing to convert yet (no link / file / recording): plain grey buttons. */
+.format-btn.inactive:not(.loading) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  opacity: 1;
 }
 
 .format-btn .btn-label {
@@ -1096,7 +1101,9 @@ kbd {
   border-left: 1px solid rgba(108, 92, 231, 0.3);
 }
 
+/* <span> is inline: it needs display:block to take its size, be centered and spin */
 .analysis-table td .spinner {
+  display: block;
   margin: 0 auto;
 }
 
@@ -1372,4 +1379,26 @@ kbd {
 body.detached {
   width: auto;
   min-height: 100vh;
+}
+
+/* ---- Sample: the whole editor is visible before a recording exists, greyed out ---- */
+#sample-result.empty {
+  opacity: 0.55;
+}
+
+#sample-result.empty #sample-waveform {
+  cursor: default;
+}
+
+#sample-play-btn:disabled,
+.edit-btn:disabled,
+.edit-select:disabled,
+#sample-btn-discard:disabled,
+#sample-filename:disabled {
+  cursor: not-allowed;
+}
+
+#sample-btn-discard:disabled,
+#sample-play-btn:disabled {
+  opacity: 0.6;
 }

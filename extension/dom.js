@@ -121,11 +121,22 @@ const els = {
 };
 
 // Fills `container` with one button per format. Picking a format calls `onPick(id)`.
-// Returns controls shared by all three tabs:
+// Returns controls shared by all the tabs:
+//   setEnabled(on) — false = greyed out until there is something to convert (a link, a file, a recording)
 //   setLoading(on) — data not ready yet: every button shows a spinner and is disabled
 //   setBusy(id|null) — a conversion is running: only that button spins, all are disabled
-function createFormatGrid(container, onPick) {
+function createFormatGrid(container, onPick, { enabled: startEnabled = true } = {}) {
   const buttons = new Map();
+  let enabled = startEnabled;
+  let loading = false;
+  let busyId = null;
+  const render = () => {
+    for (const [id, button] of buttons) {
+      button.classList.toggle("loading", loading || id === busyId);
+      button.classList.toggle("inactive", !enabled);
+      button.disabled = loading || busyId !== null || !enabled;
+    }
+  };
   for (const format of FORMATS) {
     const button = document.createElement("button");
     button.className = "format-btn";
@@ -138,18 +149,19 @@ function createFormatGrid(container, onPick) {
     container.appendChild(button);
     buttons.set(format.id, button);
   }
+  render();
   return {
+    setEnabled(on) {
+      enabled = on;
+      render();
+    },
     setLoading(on) {
-      for (const button of buttons.values()) {
-        button.classList.toggle("loading", on);
-        button.disabled = on;
-      }
+      loading = on;
+      render();
     },
     setBusy(activeId) {
-      for (const [id, button] of buttons) {
-        button.classList.toggle("loading", id === activeId);
-        button.disabled = activeId !== null;
-      }
+      busyId = activeId;
+      render();
     },
     // Show only these formats (Settings > Formats shown); columns shrink to fit.
     setVisible(ids) {
@@ -168,9 +180,10 @@ function applyVisibleFormats(ids) {
   for (const grid of [linkGrid, sampleGrid, fileGrid, batchGrid]) grid.setVisible(ids);
 }
 
-const linkGrid = createFormatGrid(els.formatOptions, (id) => handleDownload(id));
-const sampleGrid = createFormatGrid(els.sampleFormatOptions, (id) => handleSampleDownload(id));
-const fileGrid = createFormatGrid(els.fileFormatOptions, (id) => handleFileConvert(id));
+// Grey until there is something to convert: a loaded link, an added file, a recording.
+const linkGrid = createFormatGrid(els.formatOptions, (id) => handleDownload(id), { enabled: false });
+const sampleGrid = createFormatGrid(els.sampleFormatOptions, (id) => handleSampleDownload(id), { enabled: false });
+const fileGrid = createFormatGrid(els.fileFormatOptions, (id) => handleFileConvert(id), { enabled: false });
 
 
 function sendToBackground(message) {

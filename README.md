@@ -385,4 +385,8 @@ Cele două tabele (BPM | Key și Reverb size | Pre-delay | Decay time) apar **di
 
 ## Versionare
 
-Versiunea curentă e **1.0.1** (`extension/manifest.json`, afișată în Settings). Corecțiile mici, retușurile vizuale și schimbările de backend cresc ultima cifră (1.0.1, 1.0.2…); o funcționalitate nouă crește cifra din mijloc (1.1.0).
+Versiunea curentă e **1.0.2** (`extension/manifest.json`, afișată în Settings). Corecțiile mici, retușurile vizuale și schimbările de backend cresc ultima cifră (1.0.1, 1.0.2…); o funcționalitate nouă crește cifra din mijloc (1.1.0).
+
+## Butoane și câmpuri „gri" până se poate
+
+Butoanele de format (MP3, WAV, …) sunt pe ecran din start în Link, File și Sample, dar **gri și inactive** până există ceva de convertit: un link încărcat (Link), un fișier adăugat (File) sau o înregistrare (Sample). În Sample, tot editorul (nume, waveform, Trim silence, fade-uri) e vizibil din start, tot gri. Taburile arată textul doar pe cel selectat; la hover se aprinde doar pictograma.

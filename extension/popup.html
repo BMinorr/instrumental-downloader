@@ -40,7 +40,7 @@
           <p id="file-dropzone-formats" class="meta">MP3 · WAV · FLAC · AIFF · M4A · OGG · OPUS</p>
         </div>
 
-        <div id="file-format-options" class="format-grid hidden"></div>
+        <div id="file-format-options" class="format-grid"></div>
 
         <p id="file-progress" class="hidden"></p>
 
@@ -68,7 +68,7 @@
           </div>
         </div>
 
-        <div id="format-options" class="format-grid hidden"></div>
+        <div id="format-options" class="format-grid"></div>
 
         <p id="progress" class="hidden"></p>
 
@@ -88,9 +88,9 @@
       <div id="panel-sample" class="hidden">
         <p id="sample-status" class="meta">Record the audio playing in this tab.</p>
 
-        <div id="sample-result" class="hidden">
+        <div id="sample-result" class="empty">
           <div id="sample-toolbar">
-            <input id="sample-filename" type="text" class="text-input" spellcheck="false" />
+            <input id="sample-filename" type="text" class="text-input" spellcheck="false" placeholder="Recording name" disabled />
             <button id="sample-btn-discard" class="icon-btn" aria-label="Discard recording" title="Discard recording">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
