@@ -168,6 +168,29 @@ async function onSettingsOpened() {
   refreshUpdates({ check: settings.autoUpdateCheck });
 }
 
+// Copies a link that opens the extension as its own window (popup.html?detached=1). From there,
+// Chrome's own "Create shortcut" (⋮ menu → More tools) turns it into a pinnable taskbar/Dock icon —
+// there is no extension API to create OS shortcuts directly, so this hands off to that.
+async function copyShortcutLink() {
+  const link = chrome.runtime.getURL("popup.html?detached=1");
+  const button = els.btnCopyShortcutLink;
+  const original = button.textContent;
+  els.shortcutLinkFallback.classList.add("hidden");
+  try {
+    await navigator.clipboard.writeText(link);
+    button.textContent = "Copied!";
+  } catch {
+    // Clipboard blocked (permissions, focus): show the link so it can be selected by hand.
+    els.shortcutLinkFallback.value = link;
+    els.shortcutLinkFallback.classList.remove("hidden");
+    els.shortcutLinkFallback.select();
+    button.textContent = "Copy failed — select below";
+  }
+  setTimeout(() => {
+    button.textContent = original;
+  }, 1800);
+}
+
 // --- Tips: a small "i" after an option's name reveals a one-or-two-sentence explanation ---
 
 function initTips() {
@@ -392,6 +415,7 @@ async function initSettingsTab() {
   showRecordingShortcut();
   els.btnShortcuts.addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
   els.appVersion.textContent = chrome.runtime.getManifest?.().version || els.appVersion.textContent;
+  els.btnCopyShortcutLink.addEventListener("click", copyShortcutLink);
   els.settingsBtnRecheck.addEventListener("click", () => {
     checkServer();
     refreshUpdates({ force: true });

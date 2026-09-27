@@ -117,6 +117,8 @@ const els = {
   btnCheckUpdates: $("btn-check-updates"),
   settingAutoUpdate: $("setting-auto-update"),
   settingOpenDetached: $("setting-open-detached"),
+  btnCopyShortcutLink: $("btn-copy-shortcut-link"),
+  shortcutLinkFallback: $("shortcut-link-fallback"),
   appVersion: $("app-version"),
 };
 

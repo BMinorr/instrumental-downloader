@@ -267,6 +267,12 @@
             <span>Open in pop-out window</span>
             <span class="switch"><input type="checkbox" id="setting-open-detached" /><span class="switch-track"></span></span>
           </label>
+          <div class="settings-row" data-tip="Chrome can turn this into its own app window, with an icon you can pin to the taskbar or Dock, just like a native app.">
+            <span>Desktop shortcut</span>
+            <button id="btn-copy-shortcut-link" class="icon-btn neutral text-btn">Copy link</button>
+          </div>
+          <p class="meta">Copies a link to this window. Paste it into a new Chrome tab, press Enter, then use Chrome's ⋮ menu → More tools → Create shortcut (turn on "Open as window") — this adds an icon to your Start Menu or Applications folder that you can pin to the taskbar or Dock.</p>
+          <input id="shortcut-link-fallback" class="settings-input shortcut-link-fallback hidden" readonly aria-label="Shortcut link — select and copy" />
           <div class="settings-row" data-tip="How many queued links download at the same time. Lower is gentler on a slow computer.">
             <span>Queue: downloads at once</span>
             <select id="setting-queue-concurrency" class="settings-input">

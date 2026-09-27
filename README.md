@@ -385,8 +385,17 @@ Cele două tabele (BPM | Key și Reverb size | Pre-delay | Decay time) apar **di
 
 ## Versionare
 
-Versiunea curentă e **1.0.2** (`extension/manifest.json`, afișată în Settings). Corecțiile mici, retușurile vizuale și schimbările de backend cresc ultima cifră (1.0.1, 1.0.2…); o funcționalitate nouă crește cifra din mijloc (1.1.0).
+Versiunea curentă e **1.1.0** (`extension/manifest.json`, afișată în Settings). Corecțiile mici, retușurile vizuale și schimbările de backend cresc ultima cifră (1.0.1, 1.0.2…); o funcționalitate nouă crește cifra din mijloc (1.1.0).
 
 ## Butoane și câmpuri „gri" până se poate
 
 Butoanele de format (MP3, WAV, …) sunt pe ecran din start în Link, File și Sample, dar **gri și inactive** până există ceva de convertit: un link încărcat (Link), un fișier adăugat (File) sau o înregistrare (Sample). În Sample, tot editorul (nume, waveform, Trim silence, fade-uri) e vizibil din start, tot gri. Taburile arată textul doar pe cel selectat; la hover se aprinde doar pictograma.
+
+## Comandă rapidă pe taskbar/Dock
+
+Settings → General → **Desktop shortcut → Copy link** copiază un link către fereastra „Detached" a extensiei. Pentru iconița propriu-zisă:
+1. Lipește link-ul într-un tab nou de Chrome și apasă Enter.
+2. Meniul **⋮ → More tools → Create shortcut**, bifează **„Open as window”**, apoi Create.
+3. Se adaugă o intrare în Start Menu (Windows) sau Applications (Mac) — de acolo o fixezi pe taskbar (click dreapta → Pin to taskbar) sau o tragi în Dock.
+
+Nu e un fișier descărcat — e o comandă rapidă nativă de Chrome, ca pentru orice aplicație web instalată. Dacă `Copy link` nu poate scrie în clipboard (permisiuni), link-ul apare sub buton, gata de selectat manual.
